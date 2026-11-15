@@ -101,7 +101,7 @@ function monthBubble(ym, orders) {
       if (o.items && Array.isArray(o.items)) {
         o.items.forEach((i) => {
           const productCode = i.pid;
-          if (productCode && (String(productCode).startsWith('Sup') || P?.[i.pid]?.[1] === 'support')) {
+          if (productCode && (String(productCode).startsWith('Sup') || i.isSupport || P?.[i.pid]?.[1] === 'support')) {
             supportCount += i.q;
           }
         });
@@ -114,7 +114,14 @@ function monthBubble(ym, orders) {
         margin: 'md',
         contents: [
           txt(`วันที่ ${o.day} : ${lab}`, { weight: 'bold', color }),
-          ...(o.items || []).map((i) => row(P[i.pid]?.[0] || i.pid, i.q)),
+          ...(o.items || []).map((i) => {
+            let productName = P[i.pid]?.[0] || i.pid;
+            // เช็คและเติมคำว่า Support นำหน้าในรายการสรุปประจำเดือนหากเป็นสินค้าแถม
+            if (i.isSupport || String(i.pid).startsWith('Sup')) {
+              productName = `Support ${productName}`;
+            }
+            return row(productName, i.q);
+          }),
           {
             type: 'box',
             layout: 'horizontal',
@@ -177,7 +184,14 @@ function confirmMessage(p, id) {
   const body = [txt(SM[statusKey][0], { weight: 'bold', color: SM[statusKey][1] })];
   
   p.items.forEach((i, n) => {
-    if (i.pid !== null) return body.push(row(P[i.pid]?.[0] || i.pid, i.q));
+    if (i.pid !== null) {
+      let productName = P[i.pid]?.[0] || i.pid;
+      // เช็คและเติมคำว่า Support นำหน้าในหน้าพรีวิวคอนเฟิร์ม Order
+      if (i.isSupport || String(i.pid).startsWith('Sup')) {
+        productName = `Support ${productName}`;
+      }
+      return body.push(row(productName, i.q));
+    }
     body.push(txt(i.c && i.c.length ? `“${i.raw}” ×${i.q} ไม่ชัดเจน เลือกสินค้า:` : `ไม่พบสินค้า “${i.raw}”`, { color: '#B45309', size: 'sm', margin: 'md' }));
     if (i.c && Array.isArray(i.c)) {
       i.c.forEach((c) => body.push(btn(P[c]?.[0] || c, `a=pick&p=${id}&i=${n}&c=${c}`)));
