@@ -1,5 +1,7 @@
 // src/flex.js
 
+const { P } = require('./catalog');
+
 const SM = {
   order: ['รอจัดส่ง', '#B45309'],
   delivery: ['จัดส่งแล้วรอชำระ', '#1D4ED8'],
@@ -157,8 +159,6 @@ function monthBubble(ym, orders) {
 
   return bubble(`📋 สรุป Order เดือน ${mlabel(ym)}`, '#06C755', '#04301A', body);
 }
-
-const { P } = require('./catalog');
 
 const flex = (altText, contents) => ({ type: 'flex', altText, contents });
 
