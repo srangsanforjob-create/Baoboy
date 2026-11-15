@@ -1,30 +1,30 @@
 require('dotenv').config();
-const express = require('express');
-const line = require('@line/bot-sdk');
-const { createClient } = require('@supabase/supabase-js');
-const db = require('./src/db');
-const { parse } = require('./src/catalog');
-const { resolveMonth, addMonths, mlabel } = require('./src/months');
-const { monthsMessage, confirmMessage } = require('./src/flex');
+Const express = require('express');
+Const line = require('@line/bot-sdk');
+Const { createClient } = require('@supabase/supabase-js');
+Const db = require('./src/db');
+Const { parse } = require('./src/catalog');
+Const { resolveMonth, addMonths, mlabel } = require('./src/months');
+Const { monthsMessage, confirmMessage } = require('./src/flex');
 
-const config = {
+Const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.LINE_CHANNEL_SECRET,
 };
 
-const client = new line.messagingApi.MessagingApiClient({
+Const client = new line.messagingApi.MessagingApiClient({
   channelAccessToken: config.channelAccessToken,
 });
 
-const supabase = createClient(
+Const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
 );
 
-const reply = (replyToken, messages) => client.replyMessage({ replyToken, messages });
-const text = (t, quick) => ({ type: 'text', text: t, ...(quick ? { quickReply: { items: quick } } : {}) });
+Const reply = (replyToken, messages) => client.replyMessage({ replyToken, messages });
+Const text = (t, quick) => ({ type: 'text', text: t, ...(quick ? { quickReply: { items: quick } } : {}) });
 
-const bkk = () =>
+Const bkk = () =>
   new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Bangkok',
     year: 'numeric',
@@ -32,226 +32,235 @@ const bkk = () =>
     day: '2-digit',
   }).format(new Date());
 
-const todayYm = () => bkk().slice(0, 7);
-const ymFor = (day) => (day >= +bkk().slice(8) ? todayYm() : addMonths(todayYm(), 1));
-const chatOf = (s) => s.groupId || s.roomId || s.userId;
-const ymQuick = (ym) => ({
+Const todayYm = () => bkk().slice(0, 7);
+Const ymFor = (day) => (day >= +bkk().slice(8) ? todayYm() : addMonths(todayYm(), 1));
+Const chatOf = (s) => s.groupId || s.roomId || s.userId;
+Const ymQuick = (ym) => ({
   type: 'action',
   action: { type: 'message', label: mlabel(ym).slice(0, 20), text: `สรุป ${mlabel(ym)}` },
 });
 
 // Supabase Pending Orders Helpers
 async function savePendingDb(chat, p) {
-  try {
-    const id = Math.random().toString(36).slice(2, 10);
-    const { error } = await supabase
+  Try {
+    Const id = Math.random().toString(36).slice(2, 10);
+    Const { error } = await supabase
       .from('pending_orders')
       .insert({ id, chat_id: chat, payload: p });
-    if (error) {
-      console.error('savePendingDb error details:', error);
-      throw error;
+    If (error) {
+      Console.error('savePendingDb error details:', error);
+      Throw error;
     }
-    return id;
+    Return id;
   } catch (err) {
-    console.error('savePendingDb exception:', err);
-    throw err;
+    Console.error('savePendingDb exception:', err);
+    Throw err;
   }
 }
 
 async function getPendingDb(chat, id) {
-  if (!id) return null;
-  try {
-    const { data, error } = await supabase
+  If (!id) return null;
+  Try {
+    Const { data, error } = await supabase
       .from('pending_orders')
       .select('payload')
       .eq('id', String(id))
       .eq('chat_id', chat)
       .maybeSingle();
-    if (error) {
-      console.error('getPendingDb error:', error);
-      return null;
+    If (error) {
+      Console.error('getPendingDb error:', error);
+      Return null;
     }
-    return data ? data.payload : null;
+    Return data ? data.payload : null;
   } catch (err) {
-    console.error('getPendingDb exception:', err);
-    return null;
+    Console.error('getPendingDb exception:', err);
+    Return null;
   }
 }
 
 async function updatePendingDb(chat, id, p) {
-  try {
-    const { error } = await supabase
+  Try {
+    Const { error } = await supabase
       .from('pending_orders')
       .update({ payload: p })
       .eq('id', String(id))
       .eq('chat_id', chat);
-    if (error) throw error;
+    If (error) throw error;
   } catch (err) {
-    console.error('updatePendingDb exception:', err);
-    throw err;
+    Console.error('updatePendingDb exception:', err);
+    Throw err;
   }
 }
 
 async function deletePendingDb(chat, id) {
-  if (!id) return;
-  try {
-    const { error } = await supabase
+  If (!id) return;
+  Try {
+    Const { error } = await supabase
       .from('pending_orders')
       .delete()
       .eq('id', String(id))
       .eq('chat_id', chat);
-    if (error) console.error('deletePendingDb error:', error);
+    If (error) console.error('deletePendingDb error:', error);
   } catch (err) {
-    console.error('deletePendingDb exception:', err);
+    Console.error('deletePendingDb exception:', err);
   }
 }
 
 async function monthMsg(chat, ym) {
-  return monthsMessage([[ym, await db.listOrders(chat, ym)]]);
+  Return monthsMessage([[ym, await db.listOrders(chat, ym)]]);
 }
 
 async function onSummary(ev, chat, rest) {
-  try {
-    const yms = (typeof db.monthsWithData === 'function') ? await db.monthsWithData(chat) : [];
-    if (!rest) {
-      if (!yms || !yms.length) return reply(ev.replyToken, [text('ยังไม่มีออเดอร์')]);
-      const list = [];
-      for (const ym of yms.slice(-12)) list.push([ym, await db.listOrders(chat, ym)]);
-      return reply(ev.replyToken, [monthsMessage(list)]);
+  Try {
+    Const yms = (typeof db.monthsWithData === 'function') ? await db.monthsWithData(chat) : [];
+    If (!rest) {
+      If (!yms || !yms.length) return reply(ev.replyToken, [text('ยังไม่มีออเดอร์')]);
+      Const list = [];
+      For (const ym of yms.slice(-12)) list.push([ym, await db.listOrders(chat, ym)]);
+      Return reply(ev.replyToken, [monthsMessage(list)]);
     }
-    const r = resolveMonth(rest, todayYm(), yms);
-    if (r.kind === 'ok') return reply(ev.replyToken, [await monthMsg(chat, r.ym)]);
-    if (r.kind === 'ask') return reply(ev.replyToken, [text('หมายถึงสรุปของเดือนไหนครับ?', r.options.map(ymQuick))]);
-    const recent = (yms.length ? yms : [todayYm()]).slice(-4).map(ymQuick);
-    return reply(ev.replyToken, [text(`ไม่แน่ใจว่าเดือนไหน ลองพิมพ์เช่น สรุป Nov / สรุป พ.ย. /สรุป เดือนหน้า`, recent)]);
+    Const r = resolveMonth(rest, todayYm(), yms);
+    If (r.kind === 'ok') return reply(ev.replyToken, [await monthMsg(chat, r.ym)]);
+    If (r.kind === 'ask') return reply(ev.replyToken, [text('หมายถึงสรุปของเดือนไหนครับ?', r.options.map(ymQuick))]);
+    Const recent = (yms.length ? yms : [todayYm()]).slice(-4).map(ymQuick);
+    Return reply(ev.replyToken, [text(`ไม่แน่ใจว่าเดือนไหน ลองพิมพ์เช่น สรุป Nov / สรุป พ.ย. /สรุป เดือนหน้า`, recent)]);
   } catch (err) {
-    console.error('onSummary error:', err);
-    return reply(ev.replyToken, [text('เกิดข้อผิดพลาดในการดึงข้อมูลสรุป')]);
+    Console.error('onSummary error:', err);
+    Return reply(ev.replyToken, [text('เกิดข้อผิดพลาดในการดึงข้อมูลสรุป')]);
   }
 }
 
 async function onText(ev) {
-  try {
-    const t = ev.message.text.trim();
-    const chat = chatOf(ev.source);
-    const m = t.match(/^(?:สรุป\s*|(?:summary|sum)\b\s*)(.*)$/i);
-    if (m) return onSummary(ev, chat, m[1].trim());
+  Try {
+    Const t = ev.message.text.trim();
+    Const chat = chatOf(ev.source);
+    Const m = t.match(/^(?:สรุป\s*|(?:summary|sum)\b\s*)(.*)$/i);
+    If (m) return onSummary(ev, chat, m[1].trim());
     
-    const p = parse(t);
-    if (!p) return;
-    p.ym = ymFor(p.day);
-    p.status = 'order'; // เซ็ตสถานะเริ่มต้นตรงนี้ให้ปลอดภัย
-    const id = await savePendingDb(chat, p);
-    return reply(ev.replyToken, [confirmMessage(p, id)]);
+    Const p = parse(t);
+    If (!p) return;
+    P.ym = ymFor(p.day);
+    P.status = 'order'; // เซ็ตสถานะเริ่มต้น
+    Const id = await savePendingDb(chat, p);
+    Return reply(ev.replyToken, [confirmMessage(p, id)]);
   } catch (err) {
-    console.error('onText error:', err);
-    try {
-      return reply(ev.replyToken, [text('เกิดข้อผิดพลาดในการบันทึกออเดอร์ กรุณาลองใหม่อีกครั้ง')]);
+    Console.error('onText error:', err);
+    Try {
+      Return reply(ev.replyToken, [text('เกิดข้อผิดพลาดในการบันทึกออเดอร์ กรุณาลองใหม่อีกครั้ง')]);
     } catch (e) {
-      console.error('Failed to reply error message:', e);
+      Console.error('Failed to reply error message:', e);
     }
   }
 }
 
 async function onPostback(ev) {
-  try {
-    const chat = chatOf(ev.source);
-    const d = new URLSearchParams(ev.postback.data);
-    const a = d.get('a');
+  Try {
+    Const chat = chatOf(ev.source);
+    Const d = new URLSearchParams(ev.postback.data);
+    Const a = d.get('a');
 
-    if (a === 'status') {
-      const o = await db.updateOrderStatus(chat, +d.get('o'), d.get('s'));
-      if (!o) return reply(ev.replyToken, [text('ไม่พบรายการนี้แล้ว')]);
-      return reply(ev.replyToken, [await monthMsg(chat, o.ym)]);
+    If (a === 'status') {
+      Const o = await db.updateOrderStatus(chat, +d.get('o'), d.get('s'));
+      If (!o) return reply(ev.replyToken, [text('ไม่พบรายการนี้แล้ว')]);
+      Return reply(ev.replyToken, [await monthMsg(chat, o.ym)]);
     }
 
-    if (a === 'next' || a === 'del') {
-      const o = a === 'next' ? await db.cycleStatus(chat, +d.get('o')) : await db.deleteOrder(chat, +d.get('o'));
-      if (!o) return reply(ev.replyToken, [text('ไม่พบรายการนี้แล้ว')]);
-      return reply(ev.replyToken, [await monthMsg(chat, o.ym)]);
+    // แก้ไขตรงนี้ให้ใช้ updateOrderStatus แทน cycleStatus ที่ไม่มีอยู่จริง
+    If (a === 'next' || a === 'del') {
+      Let o;
+      If (a === 'next') {
+        Const currentOrder = await db.getOrder(chat, +d.get('o'));
+        If (!currentOrder) return reply(ev.replyToken, [text('ไม่พบรายการนี้แล้ว')]);
+        Const nextStatus = currentOrder.status === 'order' ? 'ออเดอร์แล้ว' : 'ยังไม่ได้ Order';
+        O = await db.updateOrderStatus(chat, +d.get('o'), nextStatus);
+      } else {
+        O = await db.deleteOrder(chat, +d.get('o'));
+      }
+      If (!o) return reply(ev.replyToken, [text('ไม่พบรายการนี้แล้ว')]);
+      Return reply(ev.replyToken, [await monthMsg(chat, o.ym)]);
     }
 
-    const id = d.get('p');
-    if (!id) {
-      return reply(ev.replyToken, [text('คำสั่งไม่ถูกต้องหรือหมดอายุแล้ว')]);
+    Const id = d.get('p');
+    If (!id) {
+      Return reply(ev.replyToken, [text('คำสั่งไม่ถูกต้องหรือหมดอายุแล้ว')]);
     }
 
-    const p = await getPendingDb(chat, id);
-    if (!p) {
-      return reply(ev.replyToken, [text('รายการนี้หมดอายุแล้ว กรุณาพิมพ์ใหม่')]);
+    Const p = await getPendingDb(chat, id);
+    If (!p) {
+      Return reply(ev.replyToken, [text('รายการนี้หมดอายุแล้ว กรุณาพิมพ์ใหม่')]);
     }
 
-    if (a === 'cancel') {
-      await deletePendingDb(chat, id);
-      return reply(ev.replyToken, [text('ยกเลิกแล้ว')]);
+    If (a === 'cancel') {
+      Await deletePendingDb(chat, id);
+      Return reply(ev.replyToken, [text('ยกเลิกแล้ว')]);
     }
 
-    if (a === 'ok') {
-      const items = [];
-      p.items
+    If (a === 'ok') {
+      Const items = [];
+      P.items
         .filter((i) => i.pid !== null)
         .forEach((i) => {
-          const e = items.find((x) => x.pid === i.pid && x.isSupport === !!i.isSupport);
-          if (e) e.q += i.q;
-          else items.push({ pid: i.pid, q: i.q, isSupport: !!i.isSupport });
+          Const e = items.find((x) => x.pid === i.pid && x.isSupport === !!i.isSupport);
+          If (e) e.q += i.q;
+          Else items.push({ pid: i.pid, q: i.q, isSupport: !!i.isSupport });
         });
       
-      const orderStatus = p.status || 'order';
-      await db.upsertOrder(chat, { ym: p.ym, day: p.day, status: orderStatus, items });
-      await deletePendingDb(chat, id);
-      return reply(ev.replyToken, [await monthMsg(chat, p.ym)]);
+      Const orderStatus = p.status || 'ยังไม่ได้ Order';
+      Await db.upsertOrder(chat, { ym: p.ym, day: p.day, status: orderStatus, items });
+      Await deletePendingDb(chat, id);
+      Return reply(ev.replyToken, [await monthMsg(chat, p.ym)]);
     }
 
-    if (a === 'pick') p.items[+d.get('i')].pid = +d.get('c');
-    else if (a === 'mm') p.ym = addMonths(p.ym, +d.get('d'));
+    If (a === 'pick') p.items[+d.get('i')].pid = +d.get('c');
+    Else if (a === 'mm') p.ym = addMonths(p.ym, +d.get('d'));
 
-    await updatePendingDb(chat, id, p);
-    return reply(ev.replyToken, [confirmMessage(p, id)]);
+    Await updatePendingDb(chat, id, p);
+    Return reply(ev.replyToken, [confirmMessage(p, id)]);
   } catch (err) {
-    console.error('onPostback error:', err);
-    try {
-      return reply(ev.replyToken, [text('เกิดข้อผิดพลาดในการทำรายการ')]);
+    Console.error('onPostback error:', err);
+    Try {
+      Return reply(ev.replyToken, [text('เกิดข้อผิดพลาดในการทำรายการ')]);
     } catch (e) {
-      console.error('Failed to reply postback error:', e);
+      Console.error('Failed to reply postback error:', e);
     }
   }
 }
 
-const app = express();
-app.get('/', (_, res) => res.send('Baoboy SUM bot is running'));
+Const app = express();
+App.get('/', (_, res) => res.send('Baoboy SUM bot is running'));
 
-app.post(
+App.post(
   '/webhook',
   express.json({
     verify: (req, res, buf) => {
-      req.rawBody = buf;
+      Req.rawBody = buf;
     },
   }),
   async (req, res) => {
-    console.log('Webhook received:', JSON.stringify(req.body));
-    const signature = req.headers['x-line-signature'];
-    if (!line.validateSignature(req.rawBody, config.channelSecret, signature)) {
-      console.error('Invalid signature!');
-      return res.status(401).send('Invalid signature');
+    Console.log('Webhook received:', JSON.stringify(req.body));
+    Const signature = req.headers['x-line-signature'];
+    If (!line.validateSignature(req.rawBody, config.channelSecret, signature)) {
+      Console.error('Invalid signature!');
+      Return res.status(401).send('Invalid signature');
     }
 
-    try {
-      await Promise.all(
-        req.body.events.map((ev) => {
-          if (ev.type === 'message' && ev.message.type === 'text') return onText(ev);
-          if (ev.type === 'postback') return onPostback(ev);
+    Try {
+      Await Promise.all(
+        Req.body.events.map((ev) => {
+          If (ev.type === 'message' && ev.message.type === 'text') return onText(ev);
+          If (ev.type === 'postback') return onPostback(ev);
         })
       );
     } catch (e) {
-      console.error('Webhook execution error:', e);
+      Console.error('Webhook execution error:', e);
     }
-    res.sendStatus(200);
+    Res.sendStatus(200);
   }
 );
 
-db.init()
+Db.init()
   .then(() => app.listen(process.env.PORT || 3000, () => console.log('listening')))
   .catch((e) => {
-    console.error('Database init error:', e);
-    process.exit(1);
+    Console.error('Database init error:', e);
+    Process.exit(1);
   });
