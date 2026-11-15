@@ -38,13 +38,16 @@ async function upsertOrder(chat, { ym, day, status, items }) {
   }
   await q('update orders set items=$1 where id=$2', [JSON.stringify(merged), ex.id]);
 }
-const NEXT = { order: 'done', done: 'paid', paid: 'order' };
-async function cycleStatus(chat, id) {
+
+// ฟังก์ชันอัปเดตสถานะออเดอร์โดยตรงตามที่เลือก
+async function updateOrderStatus(chat, id, status) {
   const o = await getOrder(chat, id);
   if (!o) return null;
-  await q('update orders set status=$1 where id=$2', [NEXT[o.status], o.id]);
+  await q('update orders set status=$1 where id=$2', [status, o.id]);
+  o.status = status; // ส่งค่าสถานะใหม่กลับไปให้ระบบใช้แสดงผล
   return o;
 }
+
 async function deleteOrder(chat, id) {
   const o = await getOrder(chat, id);
   if (o) await q('delete from orders where id=$1', [o.id]);
@@ -60,4 +63,4 @@ const getPending = async (chat, id) =>
 const updatePending = (id, p) => q('update pending set payload=$1 where id=$2', [JSON.stringify(p), id]);
 const deletePending = (id) => q('delete from pending where id=$1', [id]);
 
-module.exports = { init, listOrders, monthsWithData, getOrder, upsertOrder, cycleStatus, deleteOrder, savePending, getPending, updatePending, deletePending };
+module.exports = { init, listOrders, monthsWithData, getOrder, upsertOrder, updateOrderStatus, deleteOrder, savePending, getPending, updatePending, deletePending };
