@@ -1,4 +1,4 @@
-require('dotenv').config();
+Require('dotenv').config();
 const express = require('express');
 const line = require('@line/bot-sdk');
 const db = require('./src/db');
@@ -51,6 +51,7 @@ async function onPostback(ev) {
   const d = new URLSearchParams(ev.postback.data);
   const a = d.get('a');
 
+  // จัดการออเดอร์ที่มีอยู่แล้ว (เปลี่ยนสถานะ, ลบ, เลื่อนสถานะ)
   if (a === 'status') {
     const o = await db.updateOrderStatus(chat, +d.get('o'), d.get('s'));
     if (!o) return reply(ev.replyToken, [text('ไม่พบรายการนี้แล้ว')]);
@@ -63,10 +64,20 @@ async function onPostback(ev) {
     return reply(ev.replyToken, [await monthMsg(chat, o.ym)]);
   }
 
+  // จัดการ Pending Order (ขั้นตอนกำลังยืนยันรายการใหม่)
   const id = d.get('p');
+  if (!id) {
+    return reply(ev.replyToken, [text('คำสั่งไม่ถูกต้องหรือหมดอายุแล้ว')]);
+  }
+
   const p = await db.getPending(chat, id);
   if (!p) return reply(ev.replyToken, [text('รายการนี้หมดอายุแล้ว กรุณาพิมพ์ใหม่')]);
-  if (a === 'cancel') { await db.deletePending(id); return reply(ev.replyToken, [text('ยกเลิกแล้ว')]); }
+
+  if (a === 'cancel') { 
+    await db.deletePending(id); 
+    return reply(ev.replyToken, [text('ยกเลิกแล้ว')]); 
+  }
+  
   if (a === 'ok') {
     const items = [];
     p.items.filter((i) => i.pid !== null).forEach((i) => {
@@ -77,9 +88,11 @@ async function onPostback(ev) {
     await db.deletePending(id);
     return reply(ev.replyToken, [await monthMsg(chat, p.ym)]);
   }
+
   if (a === 'pick') p.items[+d.get('i')].pid = +d.get('c');
   else if (a === 'skip') p.items.splice(+d.get('i'), 1);
   else if (a === 'mm') p.ym = addMonths(p.ym, +d.get('d'));
+  
   await db.updatePending(id, p);
   return reply(ev.replyToken, [confirmMessage(p, id)]);
 }
