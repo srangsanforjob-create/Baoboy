@@ -1,4 +1,4 @@
-require('dotenv').config();
+Require('dotenv').config();
 const express = require('express');
 const line = require('@line/bot-sdk');
 const db = require('./src/db');
@@ -13,7 +13,6 @@ const text = (t, quick) => ({ type: 'text', text: t, ...(quick ? { quickReply: {
 
 const bkk = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const todayYm = () => bkk().slice(0, 7);
-// วันที่ >= วันนี้ = เดือนนี้, น้อยกว่าวันนี้ = เดือนถัดไป
 const ymFor = (day) => (day >= +bkk().slice(8) ? todayYm() : addMonths(todayYm(), 1));
 const chatOf = (s) => s.groupId || s.roomId || s.userId;
 const ymQuick = (ym) => ({ type: 'action', action: { type: 'message', label: mlabel(ym).slice(0, 20), text: `สรุป ${mlabel(ym)}` } });
@@ -41,7 +40,7 @@ async function onText(ev) {
   const m = t.match(/^(?:สรุป\s*|(?:summary|sum)\b\s*)(.*)$/i);
   if (m) return onSummary(ev, chat, m[1].trim());
   const p = parse(t);
-  if (!p) return; // ข้อความทั่วไปในกลุ่ม: ไม่ตอบ
+  if (!p) return;
   p.ym = ymFor(p.day);
   const id = await db.savePending(chat, p);
   return reply(ev.replyToken, [confirmMessage(p, id)]);
@@ -51,11 +50,20 @@ async function onPostback(ev) {
   const chat = chatOf(ev.source);
   const d = new URLSearchParams(ev.postback.data);
   const a = d.get('a');
+
+  // เพิ่มส่วนรองรับการเลือกสถานะโดยตรง (a === 'status')
+  if (a === 'status') {
+    const o = await db.updateOrderStatus(chat, +d.get('o'), d.get('s'));
+    if (!o) return reply(ev.replyToken, [text('ไม่พบรายการนี้แล้ว')]);
+    return reply(ev.replyToken, [await monthMsg(chat, o.ym)]);
+  }
+
   if (a === 'next' || a === 'del') {
     const o = a === 'next' ? await db.cycleStatus(chat, +d.get('o')) : await db.deleteOrder(chat, +d.get('o'));
     if (!o) return reply(ev.replyToken, [text('ไม่พบรายการนี้แล้ว')]);
     return reply(ev.replyToken, [await monthMsg(chat, o.ym)]);
   }
+
   const id = d.get('p');
   const p = await db.getPending(chat, id);
   if (!p) return reply(ev.replyToken, [text('รายการนี้หมดอายุแล้ว กรุณาพิมพ์ใหม่')]);
