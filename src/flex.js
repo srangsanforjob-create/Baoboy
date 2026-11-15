@@ -6,7 +6,6 @@ const SM = {
   paid: ['ชำระเงินแล้ว', '#059669'],
 };
 
-// ปรับชื่อหมวด amenity เป็น "ยอดเบิก Amenity สะสม"
 const CATS = {
   d: 'เบียร์สด (ถัง)',
   b: 'เบียร์ขวด/กระป๋อง',
@@ -87,6 +86,7 @@ function monthBubble(ym, orders) {
   const body = [];
   let barrels = 0;
   const tally = {};
+  const amenityTally = {}; // แยกเก็บยอดเบิก Amenity ทุกสถานะ
   let pendingPaymentCount = 0;
   let supportCount = 0;
 
@@ -106,6 +106,11 @@ function monthBubble(ym, orders) {
           const productCode = i.pid;
           if (productCode !== null && (String(productCode).startsWith('Sup') || i.isSupport || P?.[i.pid]?.[1] === 'support')) {
             supportCount += i.q;
+          }
+
+          // ถ้ารายการนี้เป็นหมวด Amenity ให้จับมารวมยอดสะสมทันที ทุกสถานะ
+          if (productCode !== null && P[productCode]?.[1] === 'amenity') {
+            amenityTally[productCode] = (amenityTally[productCode] || 0) + i.q;
           }
         });
       }
@@ -147,11 +152,14 @@ function monthBubble(ym, orders) {
       });
       body.push(sep);
 
+      // สำหรับยอดขายปกติ (นับเฉพาะที่จ่ายแล้ว)
       if (o.status === 'paid' && o.items && Array.isArray(o.items)) {
         o.items.forEach((i) => {
-          tally[i.pid] = (tally[i.pid] || 0) + i.q;
-          if (P[i.pid]?.[1] === 'd') {
-            barrels += i.q;
+          if (P[i.pid]?.[1] !== 'amenity') { // ไม่เอา amenity มาปนกับยอดขาย
+            tally[i.pid] = (tally[i.pid] || 0) + i.q;
+            if (P[i.pid]?.[1] === 'd') {
+              barrels += i.q;
+            }
           }
         });
       }
@@ -162,15 +170,22 @@ function monthBubble(ym, orders) {
   body.push(txt(`🎁 Support รวม: ${supportCount} ชิ้น`, { weight: 'bold', color: '#D97706', margin: 'sm' }));
   body.push(txt(`รวม ${barrels} ถัง (รับเฉพาะที่ชำระแล้ว)`, { weight: 'bold', margin: 'md' }));
   body.push(sep);
-  body.push(txt('📊 ยอดขายสะสม (เฉพาะชำระแล้ว)', { weight: 'bold', margin: 'md' }));
+  body.push(txt('📊 สรุปยอดสะสม', { weight: 'bold', margin: 'md' }));
 
-  Object.keys(CATS).forEach((c) => {
+  // แสดงยอดขายเบียร์ (เฉพาะจ่ายแล้ว)
+  ['d', 'b', 'o'].forEach((c) => {
     const ps = Object.keys(tally).filter((i) => P[i]?.[1] === c);
-    if (ps.length > 0 || ['d', 'b', 'amenity', 'o'].includes(c)) {
+    if (ps.length > 0 || ['d', 'b'].includes(c)) {
       body.push(row(CATS[c], ps.reduce((a, i) => a + tally[i], 0), { weight: 'bold', margin: 'sm' }));
       ps.forEach((i) => body.push(row('• ' + P[i][0], tally[i], { color: '#6B7280' })));
     }
   });
+
+  // แสดงยอดเบิก Amenity สะสม (รวมทุกสถานะทันทีที่คีย์)
+  const amenityKeys = Object.keys(amenityTally);
+  const totalAmenityQty = amenityKeys.reduce((a, i) => a + amenityTally[i], 0);
+  body.push(row(CATS['amenity'], totalAmenityQty, { weight: 'bold', margin: 'sm' }));
+  amenityKeys.forEach((i) => body.push(row('• ' + P[i][0], amenityTally[i], { color: '#6B7280' })));
 
   return bubble(`📋 สรุป Order เดือน ${mlabel(ym)}`, '#06C755', '#04301A', body);
 }
