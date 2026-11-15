@@ -1,12 +1,20 @@
 // สินค้า + การจับคำใกล้เคียง (ไทย/อังกฤษ/พิมพ์ผิด) + แยกข้อความออเดอร์
-const CATS = { d: 'เบียร์สด (ถัง)', b: 'เบียร์ขวด/กระป๋อง', o: 'สินค้าอื่นๆ', support: 'Support' };
-// [ชื่อ, หมวด, คีย์เวิร์ดเพิ่มเติม]  (index 0,1,2 = L,R,D)
+const CATS = { d: 'เบียร์สด (ถัง)', b: 'เบียร์ขวด/กระป๋อง', amenity: 'Amenity', o: 'สินค้าอื่นๆ', support: 'Support' };
+// [ชื่อ, หมวด, คีย์เวิร์ดเพิ่มเติม]
 const P = [
+  // เบียร์สด
   ['Lager สด', 'd', 'ลาเกอร์ draft'], ['Rose สด', 'd', 'โรเซ่ โรเซ draft'], ['Dunkel สด', 'd', 'ดังเคล ดันเคล draft'],
+  // เบียร์ขวด/กระป๋อง
   ['Lager ขวด 620ml', 'b', 'ลาเกอร์ bottle'], ['Dunkel ขวด 620ml', 'b', 'ดังเคล ดังเคล bottle'],
   ['Lager กระป๋อง 490ml', 'b', 'ลาเกอร์ can'], ['Dunkel กระป๋อง 490ml', 'b', 'ดังเคล ดันเคล can'],
   ['Weizen กระป๋อง 490ml', 'b', 'ไวเซ่น ไวเซน can'], ['Rose กระป๋อง 490ml', 'b', 'โรเซ่ โรเซ can'],
   ['IPA กระป๋อง 490ml', 'b', 'ไอพีเอ can'], ['PATTAYA กระป๋อง 490ml', 'b', 'พัทยา can'], ['PHUKET กระป๋อง 490ml', 'b', 'ภูเก็ต can'],
+  // Amenity
+  ['Mug 0.3L', 'amenity', 'mug แก้ว มัค 0.3 m'],
+  ['Pine 0.5L', 'amenity', 'pine พายน์ 0.5 p'],
+  ['Jug 1L', 'amenity', 'jug เหยือก 1 j'],
+  ['Tower 3L', 'amenity', 'tower ทาวเวอร์ 3 t'],
+  // สินค้าอื่นๆ
   ['บรั่นดี Galaxy แบน 350ml', 'o', 'brandy กาแลคซี่ แบน flat'], ['บรั่นดี Galaxy กลม 700ml', 'o', 'brandy กาแลคซี่ กลม round'],
   ['เหล้าบ๊วย Kacha 375ml', 'o', 'คาชา บ๊วย plum'],
   ['Whisky TENDO 350ml', 'o', 'วิสกี้ เท็นโด เทนโด'], ['Whisky TENDO 700ml', 'o', 'วิสกี้ เท็นโด เทนโด'],
@@ -41,7 +49,7 @@ function sim(q, t) {
   return 0;
 }
 
-// ฟังก์ชันจับคู่สินค้า พร้อมตรวจจับคำว่า support, sup, แถม
+// ฟังก์ชันจับคู่สินค้า พร้อมตรวจจับคำว่า support, sup, แถม และรหัสย่อ M, P, J, T
 function match(raw) {
   let cleanRaw = raw.toLowerCase().trim();
   let isSupport = false;
@@ -52,7 +60,10 @@ function match(raw) {
   }
 
   const r = cleanRaw;
-  const code = { l: 0, r: 1, d: 2 }[r];
+  
+  // รองรับรหัสย่อพิเศษสำหรับเบียร์สดและ Amenity (m, p, j, t)
+  const codeMap = { l: 0, r: 1, d: 2, m: 12, p: 13, j: 14, t: 15 };
+  const code = codeMap[r];
   if (code !== undefined) return { pid: code, c: [], isSupport };
   
   const qs = r.split(/\s+/);
