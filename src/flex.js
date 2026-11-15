@@ -1,9 +1,9 @@
 const { P, CATS } = require('./catalog');
 const { mlabel } = require('./months');
 const SM = {
-  order: ['⏩ รอจัดส่ง', 'จัดส่งแล้ว', '#2B6CB0'],
-  done: ['❓ จัดส่งแล้วรอชำระ', 'ชำระแล้ว', '#B45309'],
-  paid: ['✅ ชำระแล้ว', 'ย้อนเป็นรอจัดส่ง', '#1F7A45'],
+  order: ['⏩ รอจัดส่ง', '#2B6CB0'],
+  delivery: ['📦 จัดส่งแล้วรอชำระ', '#B45309'],
+  paid: ['✅ ชำระเงินแล้ว', '#1F7A45'],
 };
 const txt = (text, o = {}) => ({ type: 'text', text: String(text), wrap: true, ...o });
 const row = (l, r, o = {}) => ({
@@ -27,13 +27,22 @@ function monthBubble(ym, orders) {
   const tally = {};
   if (!orders.length) body.push(txt('ยังไม่มีออเดอร์ในเดือนนี้', { color: '#6B7280' }));
   orders.forEach((o) => {
-    const [lab, nextLabel, color] = SM[o.status];
+    // รองรับสถานะปัจจุบัน (ถ้าไม่มีใน SM ให้ fallback ไปที่ order)
+    const currentStatus = SM[o.status] ? o.status : 'order';
+    const [lab, color] = SM[currentStatus];
+    
     body.push({
       type: 'box', layout: 'vertical', spacing: 'xs', margin: 'md',
       contents: [
         txt(`วันที่ ${o.day} : ${lab}`, { weight: 'bold', color }),
         ...o.items.map((i) => row(P[i.pid][0], i.q)),
-        hbox([btn(nextLabel, `a=next&o=${o.id}`), btn('ลบ', `a=del&o=${o.id}`)]),
+        // เปลี่ยนจากปุ่มกดวนลูป เป็นชุดปุ่มเลือกสถานะโดยตรง และปุ่มลบ
+        hbox([
+          btn('รอจัดส่ง', `a=status&o=${o.id}&s=order`),
+          btn('จัดส่งแล้ว', `a=status&o=${o.id}&s=delivery`),
+          btn('ชำระแล้ว', `a=status&o=${o.id}&s=paid`),
+        ]),
+        hbox([btn('ลบ', `a=del&o=${o.id}`, 'secondary')]),
       ],
     });
     body.push(sep);
@@ -57,8 +66,9 @@ const monthsMessage = (list) => {
 
 // การ์ดยืนยันออเดอร์ (มีตัวเลือกเมื่อคำสินค้าไม่ชัด)
 function confirmMessage(p, id) {
+  const statusKey = SM[p.status] ? p.status : 'order';
   const ready = p.items.length > 0 && p.items.every((i) => i.pid !== null);
-  const body = [txt(SM[p.status][0], { weight: 'bold', color: SM[p.status][2] })];
+  const body = [txt(SM[statusKey][0], { weight: 'bold', color: SM[statusKey][1] })];
   p.items.forEach((i, n) => {
     if (i.pid !== null) return body.push(row(P[i.pid][0], i.q));
     body.push(txt(i.c.length ? `“${i.raw}” ×${i.q} ไม่ชัดเจน เลือกสินค้า:` : `ไม่พบสินค้า “${i.raw}”`, { color: '#B45309', size: 'sm', margin: 'md' }));
