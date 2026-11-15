@@ -6,10 +6,13 @@ const SM = {
   paid: ['ชำระเงินแล้ว', '#059669'],
 };
 
+// ปรับชื่อหมวด amenity เป็น "ยอดเบิก Amenity สะสม"
 const CATS = {
-  b: 'เบียร์สด (ถัง)',
-  a: 'Amenity',
-  s: 'Support',
+  d: 'เบียร์สด (ถัง)',
+  b: 'เบียร์ขวด/กระป๋อง',
+  amenity: 'ยอดเบิก Amenity สะสม',
+  o: 'สินค้าอื่นๆ',
+  support: 'Support',
   e: 'Equipment',
   p: 'POSM',
 };
@@ -101,7 +104,7 @@ function monthBubble(ym, orders) {
       if (o.items && Array.isArray(o.items)) {
         o.items.forEach((i) => {
           const productCode = i.pid;
-          if (productCode && (String(productCode).startsWith('Sup') || i.isSupport || P?.[i.pid]?.[1] === 'support')) {
+          if (productCode !== null && (String(productCode).startsWith('Sup') || i.isSupport || P?.[i.pid]?.[1] === 'support')) {
             supportCount += i.q;
           }
         });
@@ -163,8 +166,10 @@ function monthBubble(ym, orders) {
 
   Object.keys(CATS).forEach((c) => {
     const ps = Object.keys(tally).filter((i) => P[i]?.[1] === c);
-    body.push(row(CATS[c], ps.reduce((a, i) => a + tally[i], 0), { weight: 'bold', margin: 'sm' }));
-    ps.forEach((i) => body.push(row('• ' + P[i][0], tally[i], { color: '#6B7280' })));
+    if (ps.length > 0 || ['d', 'b', 'amenity', 'o'].includes(c)) {
+      body.push(row(CATS[c], ps.reduce((a, i) => a + tally[i], 0), { weight: 'bold', margin: 'sm' }));
+      ps.forEach((i) => body.push(row('• ' + P[i][0], tally[i], { color: '#6B7280' })));
+    }
   });
 
   return bubble(`📋 สรุป Order เดือน ${mlabel(ym)}`, '#06C755', '#04301A', body);
@@ -192,7 +197,7 @@ function confirmMessage(p, id) {
     }
     body.push(txt(i.c && i.c.length ? `“${i.raw}” ×${i.q} ไม่ชัดเจน กรุณาเลือกสินค้า:` : `ไม่พบสินค้า “${i.raw}” กรุณาเลือกสินค้า:`, { color: '#B45309', size: 'sm', margin: 'md' }));
     
-    const suggestList = (i.c && Array.isArray(i.c) && i.c.length > 0) ? i.c : P.map((_, idx) => idx).slice(0, 5);
+    const suggestList = (i.c && Array.isArray(i.c) && i.c.length > 0) ? i.c : [0, 1, 2, 12, 13, 14, 15];
     suggestList.forEach((c) => {
       body.push(btn(P[c]?.[0] || c, `a=pick&p=${id}&i=${n}&c=${c}`, 'secondary'));
     });
