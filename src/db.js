@@ -12,14 +12,19 @@ async function init() {
     id serial primary key, chat_id text not null, ym text not null, day int not null,
     status text not null, items jsonb not null, created_at timestamptz default now())`);
   await q('create index if not exists orders_chat_ym on orders(chat_id, ym)');
-  await q(`create table if not exists pending(
+  
+  // เปลี่ยนชื่อตารางเป็น pending_orders ให้ตรงกับที่เรียกใช้งานใน server.js
+  await q(`create table if not exists pending_orders(
     id text primary key, chat_id text not null, payload jsonb not null, created_at timestamptz default now())`);
-  await q("delete from pending where created_at < now() - interval '1 day'");
+  await q("delete from pending_orders where created_at < now() - interval '1 day'");
 }
+
 const listOrders = async (chat, ym) =>
   (await q('select * from orders where chat_id=$1 and ym=$2 order by day, id', [chat, ym])).rows;
+
 const monthsWithData = async (chat) =>
   (await q('select distinct ym from orders where chat_id=$1 order by ym', [chat])).rows.map((r) => r.ym);
+
 const getOrder = async (chat, id) =>
   (await q('select * from orders where chat_id=$1 and id=$2', [chat, id])).rows[0];
 
@@ -39,12 +44,11 @@ async function upsertOrder(chat, { ym, day, status, items }) {
   await q('update orders set items=$1 where id=$2', [JSON.stringify(merged), ex.id]);
 }
 
-// ฟังก์ชันอัปเดตสถานะออเดอร์โดยตรงตามที่เลือก
 async function updateOrderStatus(chat, id, status) {
   const o = await getOrder(chat, id);
   if (!o) return null;
   await q('update orders set status=$1 where id=$2', [status, o.id]);
-  o.status = status; // ส่งค่าสถานะใหม่กลับไปให้ระบบใช้แสดงผล
+  o.status = status;
   return o;
 }
 
@@ -53,14 +57,33 @@ async function deleteOrder(chat, id) {
   if (o) await q('delete from orders where id=$1', [o.id]);
   return o;
 }
+
+// ปรับให้ใช้ตาราง pending_orders และรองรับเงื่อนไข chat_id เพื่อความปลอดภัย
 async function savePending(chat, p) {
   const id = crypto.randomBytes(5).toString('hex');
-  await q('insert into pending(id,chat_id,payload) values($1,$2,$3)', [id, chat, JSON.stringify(p)]);
+  await q('insert into pending_orders(id,chat_id,payload) values($1,$2,$3)', [id, chat, JSON.stringify(p)]);
   return id;
 }
-const getPending = async (chat, id) =>
-  (await q('select payload from pending where id=$1 and chat_id=$2', [id, chat])).rows[0]?.payload;
-const updatePending = (id, p) => q('update pending set payload=$1 where id=$2', [JSON.stringify(p), id]);
-const deletePending = (id) => q('delete from pending where id=$1', [id]);
 
-module.exports = { init, listOrders, monthsWithData, getOrder, upsertOrder, updateOrderStatus, deleteOrder, savePending, getPending, updatePending, deletePending };
+const getPending = async (chat, id) =>
+  (await q('select payload from pending_orders where id=$1 and chat_id=$2', [id, chat])).rows[0]?.payload;
+
+const updatePending = async (chat, id, p) => 
+  q('update pending_orders set payload=$1 where id=$2 and chat_id=$3', [JSON.stringify(p), id, chat]);
+
+const deletePending = async (chat, id) => 
+  q('delete from pending_orders where id=$1 and chat_id=$2', [id, chat]);
+
+module.exports = { 
+  init, 
+  listOrders, 
+  monthsWithData, 
+  getOrder, 
+  upsertOrder, 
+  updateOrderStatus, 
+  deleteOrder, 
+  savePending, 
+  getPending, 
+  updatePending, 
+  deletePending 
+};
