@@ -132,17 +132,40 @@ async function onSummary(ev, chat, rest) {
 
 async function onText(ev) {
   try {
-    const t = ev.message.text.trim();
+    const rawText = ev.message.text.trim();
     const chat = chatOf(ev.source);
-    const m = t.match(/^(?:สรุป\s*|(?:summary|sum)\b\s*)(.*)$/i);
+    
+    // ตรวจสอบคำสั่งสรุป
+    const m = rawText.match(/^(?:สรุป\s*|(?:summary|sum)\b\s*)(.*)$/i);
     if (m) return onSummary(ev, chat, m[1].trim());
     
-    const p = parse(t);
-    if (!p) return;
-    p.ym = ymFor(p.day);
-    // ใช้ค่า p.status ที่ได้จากการ parse (paid, delivery, หรือ order) ทันที
+    // แยกข้อความตามบรรทัด รองรับการพิมพ์หลายวันพร้อมกัน
+    const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+    const parsedOrders = [];
+
+    for (const line of lines) {
+      const p = parse(line);
+      if (p) {
+        p.ym = ymFor(p.day);
+        parsedOrders.push(p);
+      }
+    }
+
+    if (parsedOrders.length === 0) return;
+
+    // เลือกรายการแรกมาทำ Confirm Card (และใช้ p.status ที่ติดมากับคำลงท้าย paid/bill ได้เลย)
+    const p = parsedOrders[0];
     const id = await savePendingDb(chat, p);
-    return reply(ev.replyToken, [confirmMessage(p, id)]);
+    
+    let replyText = `บันทึกรายการของวันที่ ${p.day} ครับ`;
+    if (parsedOrders.length > 1) {
+      replyText = `พบข้อมูลหลายวัน (ระบบเปิดหน้ายืนยันของวันที่ ${p.day} ให้ตรวจสอบก่อนครับ)`;
+    }
+
+    return reply(ev.replyToken, [
+      text(replyText),
+      confirmMessage(p, id)
+    ]);
   } catch (err) {
     console.error('onText error:', err);
     try {
