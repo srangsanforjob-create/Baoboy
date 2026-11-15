@@ -1,5 +1,3 @@
-// src/flex.js
-
 const { P } = require('./catalog');
 
 const SM = {
@@ -50,6 +48,10 @@ function btn(label, data, style = 'primary', color = undefined) {
   };
 }
 
+function hbox(contents) {
+  return { type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'md', contents };
+}
+
 const sep = { type: 'separator', margin: 'md' };
 
 function mlabel(ym) {
@@ -85,65 +87,67 @@ function monthBubble(ym, orders) {
   let pendingPaymentCount = 0;
   let supportCount = 0;
 
-  if (!orders.length) {
+  if (!orders || !orders.length) {
     body.push(txt('ยังไม่มีออเดอร์ในเดือนนี้', { color: '#6B7280' }));
-  }
+  } else {
+    orders.forEach((o) => {
+      const currentStatus = SM[o.status] ? o.status : 'order';
+      const [lab, color] = SM[currentStatus];
 
-  orders.forEach((o) => {
-    const currentStatus = SM[o.status] ? o.status : 'order';
-    const [lab, color] = SM[currentStatus];
+      if (o.status === 'delivery') {
+        pendingPaymentCount++;
+      }
 
-    if (o.status === 'delivery') {
-      pendingPaymentCount++;
-    }
+      if (o.items && Array.isArray(o.items)) {
+        o.items.forEach((i) => {
+          const productCode = i.pid;
+          if (productCode && (productCode.startsWith('Sup') || P?.[i.pid]?.[1] === 'support')) {
+            supportCount += i.q;
+          }
+        });
+      }
 
-    o.items.forEach((i) => {
-      const productCode = i.pid;
-      if (productCode && (productCode.startsWith('Sup') || P?.[i.pid]?.[1] === 'support')) {
-        supportCount += i.q;
+      body.push({
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'xs',
+        margin: 'md',
+        contents: [
+          txt(`วันที่ ${o.day} : ${lab}`, { weight: 'bold', color }),
+          ...(o.items || []).map((i) => row(P[i.pid]?.[0] || i.pid, i.q)),
+          {
+            type: 'box',
+            layout: 'horizontal',
+            spacing: 'sm',
+            margin: 'sm',
+            contents: [
+              btn('รอส่ง', `a=status&o=${o.id}&s=order`, 'secondary'),
+              btn('ส่งแล้ว', `a=status&o=${o.id}&s=delivery`, 'primary', '#D97706'),
+              btn('จ่ายแล้ว', `a=status&o=${o.id}&s=paid`, 'primary', '#059669'),
+            ],
+          },
+          {
+            type: 'box',
+            layout: 'horizontal',
+            margin: 'xs',
+            contents: [
+              btn('ลบ', `a=del&o=${o.id}`, 'link', '#DC2626')
+            ],
+          },
+        ],
+      });
+      body.push(sep);
+
+      if (o.status === 'paid' && o.items && Array.isArray(o.items)) {
+        o.items.forEach((i) => {
+          tally[i.pid] = (tally[i.pid] || 0) + i.q;
+          if (P[i.pid]?.[1] === 'd') {
+            barrels += i.q;
+          }
+        });
       }
     });
-
-    body.push({
-      type: 'box',
-      layout: 'vertical',
-      spacing: 'xs',
-      margin: 'md',
-      contents: [
-        txt(`วันที่ ${o.day} : ${lab}`, { weight: 'bold', color }),
-        ...o.items.map((i) => row(P[i.pid][0], i.q)),
-        {
-          type: 'box',
-          layout: 'horizontal',
-          spacing: 'sm',
-          margin: 'sm',
-          contents: [
-            btn('รอส่ง', `a=status&o=${o.id}&s=order`, 'secondary'),
-            btn('ส่งแล้ว', `a=status&o=${o.id}&s=delivery`, 'primary', '#D97706'),
-            btn('จ่ายแล้ว', `a=status&o=${o.id}&s=paid`, 'primary', '#059669'),
-          ],
-        },
-        {
-          type: 'box',
-          layout: 'horizontal',
-          margin: 'xs',
-          contents: [
-            btn('ลบ', `a=del&o=${o.id}`, 'link', '#DC2626')
-          ],
-        },
-      ],
-    });
-    body.push(sep);
-
-    if (o.status === 'paid') {
-      o.items.forEach((i) => {
-        tally[i.pid] = (tally[i.pid] || 0) + i.q;
-        if (P[i.pid][1] === 'd') {
-          barrels += i.q;
-        }
-      });
-    }
-  });
+  }
 
   body.push(txt(`📦 ค้างชำระ: ${pendingPaymentCount} รายการ`, { weight: 'bold', color: '#B45309', margin: 'md' }));
   body.push(txt(`🎁 Support รวม: ${supportCount} ชิ้น`, { weight: 'bold', color: '#D97706', margin: 'sm' }));
@@ -152,7 +156,7 @@ function monthBubble(ym, orders) {
   body.push(txt('📊 ยอดขายสะสม (เฉพาะชำระแล้ว)', { weight: 'bold', margin: 'md' }));
 
   Object.keys(CATS).forEach((c) => {
-    const ps = Object.keys(tally).filter((i) => P[i][1] === c);
+    const ps = Object.keys(tally).filter((i) => P[i]?.[1] === c);
     body.push(row(CATS[c], ps.reduce((a, i) => a + tally[i], 0), { weight: 'bold', margin: 'sm' }));
     ps.forEach((i) => body.push(row('• ' + P[i][0], tally[i], { color: '#6B7280' })));
   });
@@ -173,9 +177,11 @@ function confirmMessage(p, id) {
   const body = [txt(SM[statusKey][0], { weight: 'bold', color: SM[statusKey][1] })];
   
   p.items.forEach((i, n) => {
-    if (i.pid !== null) return body.push(row(P[i.pid][0], i.q));
-    body.push(txt(i.c.length ? `“${i.raw}” ×${i.q} ไม่ชัดเจน เลือกสินค้า:` : `ไม่พบสินค้า “${i.raw}”`, { color: '#B45309', size: 'sm', margin: 'md' }));
-    i.c.forEach((c) => body.push(btn(P[c][0], `a=pick&p=${id}&i=${n}&c=${c}`)));
+    if (i.pid !== null) return body.push(row(P[i.pid]?.[0] || i.pid, i.q));
+    body.push(txt(i.c && i.c.length ? `“${i.raw}” ×${i.q} ไม่ชัดเจน เลือกสินค้า:` : `ไม่พบสินค้า “${i.raw}”`, { color: '#B45309', size: 'sm', margin: 'md' }));
+    if (i.c && Array.isArray(i.c)) {
+      i.c.forEach((c) => body.push(btn(P[c]?.[0] || c, `a=pick&p=${id}&i=${n}&c=${c}`)));
+    }
     body.push(btn('ข้ามรายการนี้', `a=skip&p=${id}&i=${n}`));
   });
   
@@ -183,10 +189,6 @@ function confirmMessage(p, id) {
   const footer = [hbox([btn('ยกเลิก', `a=cancel&p=${id}`), ...(ready ? [btn('ยืนยัน', `a=ok&p=${id}`, 'primary')] : [])])];
   
   return flex(`ยืนยัน Order วันที่ ${p.day}`, bubble(`ยืนยัน Order วันที่ ${p.day} · ${mlabel(p.ym)}`, '#1F2937', '#FFFFFF', body, footer));
-}
-
-function hbox(contents) {
-  return { type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'md', contents };
 }
 
 module.exports = { monthsMessage, confirmMessage };
