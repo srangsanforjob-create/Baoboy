@@ -37,13 +37,13 @@ function row(label, qty, opts = {}) {
   };
 }
 
-function btn(label, data, style = 'primary', color = undefined, height = 'xs') {
+function btn(label, data, style = 'primary', color = undefined) {
   return {
     type: 'button',
     action: { type: 'postback', label, data },
     style,
     color,
-    height,
+    height: 'xs',
     flex: 1,
   };
 }
