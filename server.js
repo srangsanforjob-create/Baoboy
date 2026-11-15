@@ -140,7 +140,7 @@ async function onText(ev) {
     const p = parse(t);
     if (!p) return;
     p.ym = ymFor(p.day);
-    p.status = 'order';
+    // ใช้ค่า p.status ที่ได้จากการ parse (paid, delivery, หรือ order) ทันที
     const id = await savePendingDb(chat, p);
     return reply(ev.replyToken, [confirmMessage(p, id)]);
   } catch (err) {
@@ -204,7 +204,7 @@ async function onPostback(ev) {
           else items.push({ pid: i.pid, q: i.q, isSupport: !!i.isSupport });
         });
       
-      const orderStatus = p.status || 'ยังไม่ได้ Order';
+      const orderStatus = p.status || 'order';
       await db.upsertOrder(chat, { ym: p.ym, day: p.day, status: orderStatus, items });
       await deletePendingDb(chat, id);
       return reply(ev.replyToken, [await monthMsg(chat, p.ym)]);
