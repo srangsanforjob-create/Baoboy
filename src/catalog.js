@@ -75,13 +75,31 @@ function match(raw) {
   return { pid: null, c: sc.slice(0, 5).map((x) => x[0]), isSupport };
 }
 
-// ฟังก์ชันแยกข้อความออเดอร์ (จัดการช่องว่างเกิน และคำลงท้าย paid / bill)
+// ฟังก์ชันแยกข้อความออเดอร์ (รองรับทั้งรูปแบบวันเดี่ยว และรูปแบบ วว/ดด/ปป เช่น 15/11/26)
 function parse(text) {
   const toks = text.trim().split(/\s+/).filter(Boolean);
-  if (toks.length === 0 || !/^\d{1,2}$/.test(toks[0])) return null;
+  if (toks.length === 0) return null;
   
-  const day = +toks[0];
-  if (day < 1 || day > 31) return null;
+  let day = null;
+  let customYm = null;
+  let startIndex = 1;
+
+  // ตรวจสอบว่าโทเค็นแรกเป็นรูปแบบวันที่แบบ วว/ดด/ปป หรือ วว/ดด/ปปปป หรือไม่ (เช่น 15/11/26 หรือ 15/11/2026)
+  const dateMatch = toks[0].match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (dateMatch) {
+    day = +dateMatch[1];
+    let m = +dateMatch[2];
+    let y = +dateMatch[3];
+    if (y < 100) y += 2000; // แปลงปี 2 หลัก เช่น 26 เป็น 2026
+    if (day < 1 || day > 31 || m < 1 || m > 12) return null;
+    customYm = `${y}-${String(m).padStart(2, '0')}`;
+  } else if (/^\d{1,2}$/.test(toks[0])) {
+    // กรณีพิมพ์มาแค่วันเดี่ยวๆ เช่น "15"
+    day = +toks[0];
+    if (day < 1 || day > 31) return null;
+  } else {
+    return null;
+  }
 
   let status = 'order'; // Default เป็นรอจัดส่ง
   const lastToken = toks[toks.length - 1].toLowerCase();
@@ -95,7 +113,7 @@ function parse(text) {
   }
 
   const rest = [];
-  toks.slice(1).forEach((t) => { 
+  toks.slice(startIndex).forEach((t) => { 
     const l = t.toLowerCase(); 
     if (ST[l]) {
       status = ST[l]; 
@@ -129,7 +147,8 @@ function parse(text) {
     it.isSupport = matched.isSupport;
   });
   
-  return { day, status, items };
+  // ส่งค่า ym กลับไปพร้อมกันด้วย (ถ้ามีระบุมาในแบบ วว/ดด/ปป)
+  return { day, ym: customYm, status, items };
 }
 
 module.exports = { CATS, P, parse, match };
