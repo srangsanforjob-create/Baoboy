@@ -31,11 +31,13 @@ const getOrder = async (chat, id) =>
 async function upsertOrder(chat, { ym, day, status, items }) {
   const targetStatus = status || 'order';
   
-  const ex = (await q('select * from orders where chat_id=$1 and ym=$2 and day=$3 and status=$4',
-    [chat, ym, day, targetStatus])).rows[0];
+  const res = await q('select * from orders where chat_id=$1 and ym=$2 and day=$3 and status=$4',
+    [chat, ym, day, targetStatus]);
+  const ex = res.rows[0];
   
   if (!ex) {
-    await q('insert into orders(chat_id,ym,day,status,items) values($1,$2,$3,$4,$5)', [chat, ym, day, targetStatus, JSON.stringify(items)]);
+    await q('insert into orders(chat_id, ym, day, status, items) values($1, $2, $3, $4, $5)', 
+      [chat, ym, day, targetStatus, JSON.stringify(items)]);
     return;
   }
 
