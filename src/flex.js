@@ -209,14 +209,13 @@ function confirmMessage(order, pendingId) {
   };
 }
 
-// 2. การ์ดสรุปยอดรายเดือน (ปุ่มมินิมอล สีชัดเจน แยกหมวดหมู่ครบถ้วน)
+// 2. การ์ดสรุปยอดรายเดือน (รอจัดส่ง: ส้ม | รอชำระ: แดง | ชำระแล้ว: เขียว)
 function monthsMessage(monthList) {
   const bubbles = monthList.map(([ym, orders]) => {
     const statusMap = {
       order: { label: 'รอจัดส่ง', color: '#D97706' },
-      delivery: { label: 'รอชำระ', color: '#2563EB' },
-      done: { label: 'ส่งแล้ว', color: '#059669' },
-      paid: { label: 'จ่ายแล้ว', color: '#16A34A' }
+      delivery: { label: 'รอชำระ', color: '#DC2626' },
+      paid: { label: 'ชำระแล้ว', color: '#16A34A' }
     };
 
     const normalTotals = {};
@@ -294,7 +293,6 @@ function monthsMessage(monthList) {
               wrap: true,
               margin: 'xs'
             },
-            // ปุ่มมินิมอลเรียงในแถวเดียว พร้อมสีสันชัดเจนตามสถานะ
             {
               type: 'box',
               layout: 'horizontal',
@@ -308,19 +306,19 @@ function monthsMessage(monthList) {
                   height: 'sm',
                   action: {
                     type: 'postback',
-                    label: 'รอส่ง',
+                    label: 'รอจัดส่ง',
                     data: `a=status&o=${o.id}&s=order`
                   }
                 },
                 {
                   type: 'button',
-                  style: o.status === 'done' ? 'primary' : 'secondary',
-                  color: o.status === 'done' ? '#059669' : '#F1F5F9',
+                  style: o.status === 'delivery' ? 'primary' : 'secondary',
+                  color: o.status === 'delivery' ? '#DC2626' : '#F1F5F9',
                   height: 'sm',
                   action: {
                     type: 'postback',
-                    label: 'ส่งแล้ว',
-                    data: `a=status&o=${o.id}&s=done`
+                    label: 'รอชำระ',
+                    data: `a=status&o=${o.id}&s=delivery`
                   }
                 },
                 {
@@ -330,14 +328,14 @@ function monthsMessage(monthList) {
                   height: 'sm',
                   action: {
                     type: 'postback',
-                    label: 'จ่ายแล้ว',
+                    label: 'ชำระแล้ว',
                     data: `a=status&o=${o.id}&s=paid`
                   }
                 },
                 {
                   type: 'button',
                   style: 'secondary',
-                  color: '#FEE2E2',
+                  color: '#E2E8F0',
                   height: 'sm',
                   action: {
                     type: 'postback',
