@@ -42,46 +42,68 @@ const ymQuick = (ym) => ({
 
 // Supabase Pending Orders Helpers
 async function savePendingDb(chat, p) {
-  const id = Math.random().toString(36).slice(2, 10);
-  const { error } = await supabase
-    .from('pending_orders')
-    .insert({ id, chat_id: chat, payload: p });
-  if (error) throw error;
-  return id;
+  try {
+    const id = Math.random().toString(36).slice(2, 10);
+    const { error } = await supabase
+      .from('pending_orders')
+      .insert({ id, chat_id: chat, payload: p });
+    if (error) {
+      console.error('savePendingDb error details:', error);
+      throw error;
+    }
+    return id;
+  } catch (err) {
+    console.error('savePendingDb exception:', err);
+    throw err;
+  }
 }
 
 async function getPendingDb(chat, id) {
   if (!id) return null;
-  const { data, error } = await supabase
-    .from('pending_orders')
-    .select('payload')
-    .eq('id', String(id))
-    .eq('chat_id', chat)
-    .maybeSingle();
-  if (error) {
-    console.error('getPendingDb error:', error);
+  try {
+    const { data, error } = await supabase
+      .from('pending_orders')
+      .select('payload')
+      .eq('id', String(id))
+      .eq('chat_id', chat)
+      .maybeSingle();
+    if (error) {
+      console.error('getPendingDb error:', error);
+      return null;
+    }
+    return data ? data.payload : null;
+  } catch (err) {
+    console.error('getPendingDb exception:', err);
     return null;
   }
-  return data ? data.payload : null;
 }
 
 async function updatePendingDb(chat, id, p) {
-  const { error } = await supabase
-    .from('pending_orders')
-    .update({ payload: p })
-    .eq('id', String(id))
-    .eq('chat_id', chat);
-  if (error) throw error;
+  try {
+    const { error } = await supabase
+      .from('pending_orders')
+      .update({ payload: p })
+      .eq('id', String(id))
+      .eq('chat_id', chat);
+    if (error) throw error;
+  } catch (err) {
+    console.error('updatePendingDb exception:', err);
+    throw err;
+  }
 }
 
 async function deletePendingDb(chat, id) {
   if (!id) return;
-  const { error } = await supabase
-    .from('pending_orders')
-    .delete()
-    .eq('id', String(id))
-    .eq('chat_id', chat);
-  if (error) console.error('deletePendingDb error:', error);
+  try {
+    const { error } = await supabase
+      .from('pending_orders')
+      .delete()
+      .eq('id', String(id))
+      .eq('chat_id', chat);
+    if (error) console.error('deletePendingDb error:', error);
+  } catch (err) {
+    console.error('deletePendingDb exception:', err);
+  }
 }
 
 async function monthMsg(chat, ym) {
@@ -109,69 +131,88 @@ async function onSummary(ev, chat, rest) {
 }
 
 async function onText(ev) {
-  const t = ev.message.text.trim();
-  const chat = chatOf(ev.source);
-  const m = t.match(/^(?:สรุป\s*|(?:summary|sum)\b\s*)(.*)$/i);
-  if (m) return onSummary(ev, chat, m[1].trim());
-  const p = parse(t);
-  if (!p) return;
-  p.ym = ymFor(p.day);
-  const id = await savePendingDb(chat, p);
-  return reply(ev.replyToken, [confirmMessage(p, id)]);
+  try {
+    const t = ev.message.text.trim();
+    const chat = chatOf(ev.source);
+    const m = t.match(/^(?:สรุป\s*|(?:summary|sum)\b\s*)(.*)$/i);
+    if (m) return onSummary(ev, chat, m[1].trim());
+    
+    const p = parse(t);
+    if (!p) return;
+    p.ym = ymFor(p.day);
+    const id = await savePendingDb(chat, p);
+    return reply(ev.replyToken, [confirmMessage(p, id)]);
+  } catch (err) {
+    console.error('onText error:', err);
+    try {
+      return reply(ev.replyToken, [text('เกิดข้อผิดพลาดในการบันทึกออเดอร์ กรุณาลองใหม่อีกครั้ง')]);
+    } catch (e) {
+      console.error('Failed to reply error message:', e);
+    }
+  }
 }
 
 async function onPostback(ev) {
-  const chat = chatOf(ev.source);
-  const d = new URLSearchParams(ev.postback.data);
-  const a = d.get('a');
+  try {
+    const chat = chatOf(ev.source);
+    const d = new URLSearchParams(ev.postback.data);
+    const a = d.get('a');
 
-  if (a === 'status') {
-    const o = await db.updateOrderStatus(chat, +d.get('o'), d.get('s'));
-    if (!o) return reply(ev.replyToken, [text('ไม่พบรายการนี้แล้ว')]);
-    return reply(ev.replyToken, [await monthMsg(chat, o.ym)]);
+    if (a === 'status') {
+      const o = await db.updateOrderStatus(chat, +d.get('o'), d.get('s'));
+      if (!o) return reply(ev.replyToken, [text('ไม่พบรายการนี้แล้ว')]);
+      return reply(ev.replyToken, [await monthMsg(chat, o.ym)]);
+    }
+
+    if (a === 'next' || a === 'del') {
+      const o = a === 'next' ? await db.cycleStatus(chat, +d.get('o')) : await db.deleteOrder(chat, +d.get('o'));
+      if (!o) return reply(ev.replyToken, [text('ไม่พบรายการนี้แล้ว')]);
+      return reply(ev.replyToken, [await monthMsg(chat, o.ym)]);
+    }
+
+    const id = d.get('p');
+    if (!id) {
+      return reply(ev.replyToken, [text('คำสั่งไม่ถูกต้องหรือหมดอายุแล้ว')]);
+    }
+
+    const p = await getPendingDb(chat, id);
+    if (!p) {
+      return reply(ev.replyToken, [text('รายการนี้หมดอายุแล้ว กรุณาพิมพ์ใหม่')]);
+    }
+
+    if (a === 'cancel') {
+      await deletePendingDb(chat, id);
+      return reply(ev.replyToken, [text('ยกเลิกแล้ว')]);
+    }
+
+    if (a === 'ok') {
+      const items = [];
+      p.items
+        .filter((i) => i.pid !== null)
+        .forEach((i) => {
+          const e = items.find((x) => x.pid === i.pid);
+          if (e) e.q += i.q;
+          else items.push({ pid: i.pid, q: i.q });
+        });
+      await db.upsertOrder(chat, { ym: p.ym, day: p.day, status: p.status, items });
+      await deletePendingDb(chat, id);
+      return reply(ev.replyToken, [await monthMsg(chat, p.ym)]);
+    }
+
+    if (a === 'pick') p.items[+d.get('i')].pid = +d.get('c');
+    else if (a === 'skip') p.items.splice(+d.get('i'), 1);
+    else if (a === 'mm') p.ym = addMonths(p.ym, +d.get('d'));
+
+    await updatePendingDb(chat, id, p);
+    return reply(ev.replyToken, [confirmMessage(p, id)]);
+  } catch (err) {
+    console.error('onPostback error:', err);
+    try {
+      return reply(ev.replyToken, [text('เกิดข้อผิดพลาดในการทำรายการ')]);
+    } catch (e) {
+      console.error('Failed to reply postback error:', e);
+    }
   }
-
-  if (a === 'next' || a === 'del') {
-    const o = a === 'next' ? await db.cycleStatus(chat, +d.get('o')) : await db.deleteOrder(chat, +d.get('o'));
-    if (!o) return reply(ev.replyToken, [text('ไม่พบรายการนี้แล้ว')]);
-    return reply(ev.replyToken, [await monthMsg(chat, o.ym)]);
-  }
-
-  const id = d.get('p');
-  if (!id) {
-    return reply(ev.replyToken, [text('คำสั่งไม่ถูกต้องหรือหมดอายุแล้ว')]);
-  }
-
-  const p = await getPendingDb(chat, id);
-  if (!p) {
-    return reply(ev.replyToken, [text('รายการนี้หมดอายุแล้ว กรุณาพิมพ์ใหม่')]);
-  }
-
-  if (a === 'cancel') {
-    await deletePendingDb(chat, id);
-    return reply(ev.replyToken, [text('ยกเลิกแล้ว')]);
-  }
-
-  if (a === 'ok') {
-    const items = [];
-    p.items
-      .filter((i) => i.pid !== null)
-      .forEach((i) => {
-        const e = items.find((x) => x.pid === i.pid);
-        if (e) e.q += i.q;
-        else items.push({ pid: i.pid, q: i.q });
-      });
-    await db.upsertOrder(chat, { ym: p.ym, day: p.day, status: p.status, items });
-    await deletePendingDb(chat, id);
-    return reply(ev.replyToken, [await monthMsg(chat, p.ym)]);
-  }
-
-  if (a === 'pick') p.items[+d.get('i')].pid = +d.get('c');
-  else if (a === 'skip') p.items.splice(+d.get('i'), 1);
-  else if (a === 'mm') p.ym = addMonths(p.ym, +d.get('d'));
-
-  await updatePendingDb(chat, id, p);
-  return reply(ev.replyToken, [confirmMessage(p, id)]);
 }
 
 const app = express();
@@ -200,7 +241,7 @@ app.post(
         })
       );
     } catch (e) {
-      console.error(e);
+      console.error('Webhook execution error:', e);
     }
     res.sendStatus(200);
   }
@@ -209,6 +250,6 @@ app.post(
 db.init()
   .then(() => app.listen(process.env.PORT || 3000, () => console.log('listening')))
   .catch((e) => {
-    console.error(e);
+    console.error('Database init error:', e);
     process.exit(1);
   });
