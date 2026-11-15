@@ -46,7 +46,6 @@ function match(raw) {
   let cleanRaw = raw.toLowerCase().trim();
   let isSupport = false;
 
-  // ตรวจจับและตัดคีย์เวิร์ดซัพพอร์ต/แถม ออกจากข้อความเพื่อนำชื่อที่เหลือไปเทียบแค็ตตาล็อก
   if (cleanRaw.startsWith('support') || cleanRaw.startsWith('sup') || cleanRaw.startsWith('แถม')) {
     isSupport = true;
     cleanRaw = cleanRaw.replace(/^(support|sup|แถม)\s*/i, '').trim();
@@ -89,7 +88,7 @@ function parse(text) {
     const matched = match(it.raw);
     it.pid = matched.pid;
     it.c = matched.c;
-    it.isSupport = matched.isSupport; // ส่ง flag นี้ไปใช้งานต่อในระบบแสดงผล
+    it.isSupport = matched.isSupport;
   });
   
   return { day, status, items };
