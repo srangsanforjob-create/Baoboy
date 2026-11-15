@@ -3,7 +3,7 @@ const CATS = { d: 'เบียร์สด (ถัง)', b: 'เบียร์
 // [ชื่อ, หมวด, คีย์เวิร์ดเพิ่มเติม]  (index 0,1,2 = L,R,D)
 const P = [
   ['Lager สด', 'd', 'ลาเกอร์ draft'], ['Rose สด', 'd', 'โรเซ่ โรเซ draft'], ['Dunkel สด', 'd', 'ดังเคล ดันเคล draft'],
-  ['Lager ขวด 620ml', 'b', 'ลาเกอร์ bottle'], ['Dunkel ขวด 620ml', 'b', 'ดังเคลดังเคล bottle'],
+  ['Lager ขวด 620ml', 'b', 'ลาเกอร์ bottle'], ['Dunkel ขวด 620ml', 'b', 'ดังเคล ดังเคล bottle'],
   ['Lager กระป๋อง 490ml', 'b', 'ลาเกอร์ can'], ['Dunkel กระป๋อง 490ml', 'b', 'ดังเคล ดันเคล can'],
   ['Weizen กระป๋อง 490ml', 'b', 'ไวเซ่น ไวเซน can'], ['Rose กระป๋อง 490ml', 'b', 'โรเซ่ โรเซ can'],
   ['IPA กระป๋อง 490ml', 'b', 'ไอพีเอ can'], ['PATTAYA กระป๋อง 490ml', 'b', 'พัทยา can'], ['PHUKET กระป๋อง 490ml', 'b', 'ภูเก็ต can'],
@@ -40,12 +40,13 @@ function sim(q, t) {
   if (q.length >= 6 && d <= 2) return 0.55;
   return 0;
 }
-// คืน {pid, isSupport} ถ้าชัดเจน, {pid:null, c:[...], isSupport} ถ้าต้องให้เลือก
+
+// ฟังก์ชันจับคู่สินค้า พร้อมตรวจจับคำว่า support, sup, แถม
 function match(raw) {
   let cleanRaw = raw.toLowerCase().trim();
   let isSupport = false;
 
-  // ตรวจจับและตัดคีย์เวิร์ดซัพพอร์ต/แถม ออกจากชื่อสินค้า
+  // ตรวจจับและตัดคีย์เวิร์ดซัพพอร์ต/แถม ออกจากข้อความเพื่อนำชื่อที่เหลือไปเทียบแค็ตตาล็อก
   if (cleanRaw.startsWith('support') || cleanRaw.startsWith('sup') || cleanRaw.startsWith('แถม')) {
     isSupport = true;
     cleanRaw = cleanRaw.replace(/^(support|sup|แถม)\s*/i, '').trim();
@@ -64,7 +65,7 @@ function match(raw) {
   return { pid: null, c: sc.slice(0, 5).map((x) => x[0]), isSupport };
 }
 
-// ไม่ใช่รูปแบบออเดอร์ (ไม่ขึ้นต้นด้วยวันที่ หรือไม่มีรายการ) -> null (บอทเงียบ ไม่รบกวนแชทกลุ่ม)
+// แยกข้อความออเดอร์
 function parse(text) {
   const toks = text.trim().split(/\s+/);
   if (!/^\d{1,2}$/.test(toks[0])) return null;
@@ -88,13 +89,10 @@ function parse(text) {
     const matched = match(it.raw);
     it.pid = matched.pid;
     it.c = matched.c;
-    it.isSupport = matched.isSupport;
-    // หากเป็น support สามารถกำหนดรหัสพิเศษ หรือเก็บบ่งบอกสถานะไว้ใน item ได้ เช่นขึ้นต้นด้วย 'Sup' หรือพิจารณาจาก flag isSupport
-    if (matched.isSupport && it.pid !== null) {
-      it.pid = 'Sup' + it.pid; // หรือแปลงรหัสเพื่อแยกประเภท
-    }
+    it.isSupport = matched.isSupport; // ส่ง flag นี้ไปใช้งานต่อในระบบแสดงผล
   });
   
   return { day, status, items };
 }
+
 module.exports = { CATS, P, parse, match };
