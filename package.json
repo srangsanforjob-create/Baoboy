@@ -2,9 +2,9 @@
   "name": "baoboy-sum-line-bot",
   "version": "1.0.0",
   "description": "LINE bot: collects beer/liquor orders in a group, monthly Flex summaries",
-  "main": "src/server.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node server.js",
     "test": "node test.js"
   },
   "engines": {
