@@ -33,7 +33,13 @@ const bkk = () =>
   }).format(new Date());
 
 const todayYm = () => bkk().slice(0, 7);
-const ymFor = (day) => (day >= +bkk().slice(8) ? todayYm() : addMonths(todayYm(), 1));
+
+// ปรับปรุง ymFor: ให้บันทึกเข้าเดือนปัจจุบัน (todayYm) เป็นหลัก เพื่อให้ออเดอร์ย้อนหลังในเดือนเดียวกันแสดงผลครบถ้วน ไม่ถูกปัดไปเดือนหน้า
+const ymFor = (day) => {
+  // หากต้องการยืดหยุ่น เช่น ถ้าวันห่างกันมากๆ ค่อยเช็ก แต่ค่าเริ่มต้นควรอิงเดือนปัจจุบันของวันนี้
+  return todayYm();
+};
+
 const chatOf = (s) => s.groupId || s.roomId || s.userId;
 const ymQuick = (ym) => ({
   type: 'action',
@@ -162,7 +168,7 @@ async function onText(ev) {
       const hasAmbiguousItem = p.items.some(i => i.pid === null);
 
       if (!hasAmbiguousItem) {
-        // กรณีข้อมูลชัดเจน: บันทึกลงฐานข้อมูลทันทีอัตโนมัติ
+        // กรณีข้อมูลชัดเจน: บันทึกลงฐานข้อมูลทันทีอัตโนมัติ (ใช้ db.upsertOrder ซึ่งข้างในเป็น insert)
         const items = [];
         p.items.forEach((i) => {
           const e = items.find((x) => x.pid === i.pid && x.isSupport === !!i.isSupport);
