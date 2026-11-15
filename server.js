@@ -25,7 +25,7 @@ const reply = (replyToken, messages) => client.replyMessage({ replyToken, messag
 const text = (t, quick) => ({ type: 'text', text: t, ...(quick ? { quickReply: { items: quick } } : {}) });
 
 const bkk = () =>
-  new Intl('en-CA', {
+  new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Bangkok',
     year: 'numeric',
     month: '2-digit',
@@ -41,7 +41,6 @@ const ymQuick = (ym) => ({
 });
 
 // Supabase Pending Orders Helpers
-// Requires table: pending_orders (id text primary key, chat_id text, payload jsonb, created_at timestamptz default now())
 async function savePendingDb(chat, p) {
   const id = Math.random().toString(36).slice(2, 10);
   const { error } = await supabase
@@ -90,18 +89,23 @@ async function monthMsg(chat, ym) {
 }
 
 async function onSummary(ev, chat, rest) {
-  const yms = await db.monthsWithData(chat);
-  if (!rest) {
-    if (!yms.length) return reply(ev.replyToken, [text('ยังไม่มีออเดอร์')]);
-    const list = [];
-    for (const ym of yms.slice(-12)) list.push([ym, await db.listOrders(chat, ym)]);
-    return reply(ev.replyToken, [monthsMessage(list)]);
+  try {
+    const yms = (typeof db.monthsWithData === 'function') ? await db.monthsWithData(chat) : [];
+    if (!rest) {
+      if (!yms || !yms.length) return reply(ev.replyToken, [text('ยังไม่มีออเดอร์')]);
+      const list = [];
+      for (const ym of yms.slice(-12)) list.push([ym, await db.listOrders(chat, ym)]);
+      return reply(ev.replyToken, [monthsMessage(list)]);
+    }
+    const r = resolveMonth(rest, todayYm(), yms);
+    if (r.kind === 'ok') return reply(ev.replyToken, [await monthMsg(chat, r.ym)]);
+    if (r.kind === 'ask') return reply(ev.replyToken, [text('หมายถึงสรุปของเดือนไหนครับ?', r.options.map(ymQuick))]);
+    const recent = (yms.length ? yms : [todayYm()]).slice(-4).map(ymQuick);
+    return reply(ev.replyToken, [text(`ไม่แน่ใจว่าเดือนไหน ลองพิมพ์เช่น สรุป Nov / สรุป พ.ย. / สรุป เดือนหน้า`, recent)]);
+  } catch (err) {
+    console.error('onSummary error:', err);
+    return reply(ev.replyToken, [text('เกิดข้อผิดพลาดในการดึงข้อมูลสรุป')]);
   }
-  const r = resolveMonth(rest, todayYm(), yms);
-  if (r.kind === 'ok') return reply(ev.replyToken, [await monthMsg(chat, r.ym)]);
-  if (r.kind === 'ask') return reply(ev.replyToken, [text('หมายถึงสรุปของเดือนไหนครับ?', r.options.map(ymQuick))]);
-  const recent = (yms.length ? yms : [todayYm()]).slice(-4).map(ymQuick);
-  return reply(ev.replyToken, [text(`ไม่แน่ใจว่าเดือนไหน ลองพิมพ์เช่น สรุป Nov / สรุป พ.ย. / สรุป เดือนหน้า`, recent)]);
 }
 
 async function onText(ev) {
