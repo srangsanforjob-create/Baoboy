@@ -101,7 +101,7 @@ function monthBubble(ym, orders) {
       if (o.items && Array.isArray(o.items)) {
         o.items.forEach((i) => {
           const productCode = i.pid;
-          if (productCode && (productCode.startsWith('Sup') || P?.[i.pid]?.[1] === 'support')) {
+          if (productCode && (String(productCode).startsWith('Sup') || P?.[i.pid]?.[1] === 'support')) {
             supportCount += i.q;
           }
         });
