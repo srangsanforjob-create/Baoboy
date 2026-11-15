@@ -181,6 +181,7 @@ app.post(
     },
   }),
   async (req, res) => {
+    console.log('Webhook received:', JSON.stringify(req.body));
     const signature = req.headers['x-line-signature'];
     if (!line.validateSignature(req.rawBody, config.channelSecret, signature)) {
       console.error('Invalid signature!');
