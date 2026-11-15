@@ -1,9 +1,9 @@
 // src/flex.js
 
 const SM = {
-  order: ['รอจัดส่ง', '#B45309'],      // สีส้มเข้ม
-  delivery: ['จัดส่งแล้วรอชำระ', '#1D4ED8'], // สีน้ำเงิน
-  paid: ['ชำระเงินแล้ว', '#059669']    // สีเขียว
+  order: ['รอจัดส่ง', '#B45309'],
+  delivery: ['จัดส่งแล้วรอชำระ', '#1D4ED8'],
+  paid: ['ชำระเงินแล้ว', '#059669'],
 };
 
 const CATS = {
@@ -11,7 +11,7 @@ const CATS = {
   a: 'Amenity',
   s: 'Support',
   e: 'Equipment',
-  p: 'POSM'
+  p: 'POSM',
 };
 
 function txt(text, opts = {}) {
@@ -21,7 +21,7 @@ function txt(text, opts = {}) {
     size: opts.size || 'sm',
     color: opts.color || '#111827',
     weight: opts.weight || 'regular',
-    margin: opts.margin || 'none'
+    margin: opts.margin || 'none',
   };
 }
 
@@ -32,23 +32,19 @@ function row(label, qty, opts = {}) {
     margin: opts.margin || 'xs',
     contents: [
       { type: 'text', text: label, size: 'sm', color: opts.color || '#374151', flex: 5 },
-      { type: 'text', text: String(qty), size: 'sm', color: opts.color || '#111827', align: 'end', flex: 1, weight: opts.weight || 'bold' }
-    ]
+      { type: 'text', text: String(qty), size: 'sm', color: opts.color || '#111827', align: 'end', flex: 1, weight: opts.weight || 'bold' },
+    ],
   };
 }
 
 function btn(label, data, style = 'primary', color = undefined) {
   return {
     type: 'button',
-    action: {
-      type: 'postback',
-      label: label,
-      data: data
-    },
-    style: style,
-    color: color,
+    action: { type: 'postback', label, data },
+    style,
+    color,
     height: 'sm',
-    flex: 1
+    flex: 1,
   };
 }
 
@@ -60,28 +56,23 @@ function mlabel(ym) {
   return `${months[parseInt(m, 10) - 1]} ${parseInt(y, 10) + 543}`;
 }
 
-function bubble(title, headerBg, headerTxtColor, bodyContents) {
+function bubble(title, headerBg, headerTxtColor, bodyContents, footerContents = null) {
   return {
     type: 'bubble',
+    size: 'mega',
     header: {
       type: 'box',
       layout: 'vertical',
       backgroundColor: headerBg,
-      contents: [
-        {
-          type: 'text',
-          text: title,
-          color: headerTxtColor,
-          weight: 'bold',
-          size: 'md'
-        }
-      ]
+      contents: [{ type: 'text', text: title, color: headerTxtColor, weight: 'bold', size: 'md' }],
     },
     body: {
       type: 'box',
       layout: 'vertical',
-      contents: bodyContents
-    }
+      paddingAll: 'md',
+      contents: bodyContents,
+    },
+    ...(footerContents ? { footer: { type: 'box', layout: 'vertical', contents: footerContents } } : {}),
   };
 }
 
@@ -89,8 +80,8 @@ function monthBubble(ym, orders) {
   const body = [];
   let barrels = 0;
   const tally = {};
-  let pendingPaymentCount = 0; // ตัวนับออเดอร์ค้างชำระ (สถานะ delivery)
-  let supportCount = 0;        // ตัวนับจำนวนสินค้า Support รวม
+  let pendingPaymentCount = 0;
+  let supportCount = 0;
 
   if (!orders.length) {
     body.push(txt('ยังไม่มีออเดอร์ในเดือนนี้', { color: '#6B7280' }));
@@ -99,16 +90,14 @@ function monthBubble(ym, orders) {
   orders.forEach((o) => {
     const currentStatus = SM[o.status] ? o.status : 'order';
     const [lab, color] = SM[currentStatus];
-    
-    // นับออเดอร์ที่อยู่ในสถานะจัดส่งแล้วรอชำระ (delivery)
+
     if (o.status === 'delivery') {
       pendingPaymentCount++;
     }
 
-    // ตรวจสอบและนับจำนวนสินค้าที่เป็น Support
     o.items.forEach((i) => {
       const productCode = i.pid;
-      if (productCode && (productCode.startsWith('Sup') || P[i.pid][1] === 'support')) {
+      if (productCode && (productCode.startsWith('Sup') || P?.[i.pid]?.[1] === 'support')) {
         supportCount += i.q;
       }
     });
@@ -121,7 +110,6 @@ function monthBubble(ym, orders) {
       contents: [
         txt(`วันที่ ${o.day} : ${lab}`, { weight: 'bold', color }),
         ...o.items.map((i) => row(P[i.pid][0], i.q)),
-        // แถวปุ่มสถานะแบบสั้นและมีสีสัน
         {
           type: 'box',
           layout: 'horizontal',
@@ -129,23 +117,22 @@ function monthBubble(ym, orders) {
           margin: 'sm',
           contents: [
             btn('รอส่ง', `a=status&o=${o.id}&s=order`, 'secondary'),
-            btn('ส่งแล้ว', `a=status&o=${o.id}&s=delivery`, 'primary', '#D97706'), // สีส้ม
-            btn('จ่ายแล้ว', `a=status&o=${o.id}&s=paid`, 'primary', '#059669')    // สีเขียว
-          ]
+            btn('ส่งแล้ว', `a=status&o=${o.id}&s=delivery`, 'primary', '#D97706'),
+            btn('จ่ายแล้ว', `a=status&o=${o.id}&s=paid`, 'primary', '#059669'),
+          ],
         },
         {
           type: 'box',
           layout: 'horizontal',
           margin: 'xs',
           contents: [
-            btn('ลบ', `a=del&o=${o.id}`, 'link', '#DC2626') // ปุ่มลบสีแดง
-          ]
-        }
+            btn('ลบ', `a=del&o=${o.id}`, 'link', '#DC2626')
+          ],
+        },
       ],
     });
     body.push(sep);
 
-    // คำนวณยอดขายเฉพาะออเดอร์ที่จ่ายเงินแล้ว (paid)
     if (o.status === 'paid') {
       o.items.forEach((i) => {
         tally[i.pid] = (tally[i.pid] || 0) + i.q;
@@ -156,13 +143,12 @@ function monthBubble(ym, orders) {
     }
   });
 
-  // ส่วนสรุปท้ายการ์ด (Summary Section)
   body.push(txt(`📦 ค้างชำระ: ${pendingPaymentCount} รายการ`, { weight: 'bold', color: '#B45309', margin: 'md' }));
   body.push(txt(`🎁 Support รวม: ${supportCount} ชิ้น`, { weight: 'bold', color: '#D97706', margin: 'sm' }));
   body.push(txt(`รวม ${barrels} ถัง (รับเฉพาะที่ชำระแล้ว)`, { weight: 'bold', margin: 'md' }));
   body.push(sep);
   body.push(txt('📊 ยอดขายสะสม (เฉพาะชำระแล้ว)', { weight: 'bold', margin: 'md' }));
-  
+
   Object.keys(CATS).forEach((c) => {
     const ps = Object.keys(tally).filter((i) => P[i][1] === c);
     body.push(row(CATS[c], ps.reduce((a, i) => a + tally[i], 0), { weight: 'bold', margin: 'sm' }));
@@ -172,4 +158,35 @@ function monthBubble(ym, orders) {
   return bubble(`📋 สรุป Order เดือน ${mlabel(ym)}`, '#06C755', '#04301A', body);
 }
 
-module.exports = { monthBubble };
+const { P } = require('./catalog');
+
+const flex = (altText, contents) => ({ type: 'flex', altText, contents });
+
+function monthsMessage(list) {
+  const bs = list.map(([ym, orders]) => monthBubble(ym, orders));
+  return flex(`สรุป Order ${list.map(([ym]) => mlabel(ym)).join(', ')}`, bs.length === 1 ? bs[0] : { type: 'carousel', contents: bs });
+}
+
+function confirmMessage(p, id) {
+  const statusKey = SM[p.status] ? p.status : 'order';
+  const ready = p.items.length > 0 && p.items.every((i) => i.pid !== null);
+  const body = [txt(SM[statusKey][0], { weight: 'bold', color: SM[statusKey][1] })];
+  
+  p.items.forEach((i, n) => {
+    if (i.pid !== null) return body.push(row(P[i.pid][0], i.q));
+    body.push(txt(i.c.length ? `“${i.raw}” ×${i.q} ไม่ชัดเจน เลือกสินค้า:` : `ไม่พบสินค้า “${i.raw}”`, { color: '#B45309', size: 'sm', margin: 'md' }));
+    i.c.forEach((c) => body.push(btn(P[c][0], `a=pick&p=${id}&i=${n}&c=${c}`)));
+    body.push(btn('ข้ามรายการนี้', `a=skip&p=${id}&i=${n}`));
+  });
+  
+  body.push(hbox([btn('‹ เดือนก่อน', `a=mm&p=${id}&d=-1`), btn('เดือนถัดไป ›', `a=mm&p=${id}&d=1`)]));
+  const footer = [hbox([btn('ยกเลิก', `a=cancel&p=${id}`), ...(ready ? [btn('ยืนยัน', `a=ok&p=${id}`, 'primary')] : [])])];
+  
+  return flex(`ยืนยัน Order วันที่ ${p.day}`, bubble(`ยืนยัน Order วันที่ ${p.day} · ${mlabel(p.ym)}`, '#1F2937', '#FFFFFF', body, footer));
+}
+
+function hbox(contents) {
+  return { type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'md', contents };
+}
+
+module.exports = { monthsMessage, confirmMessage };
