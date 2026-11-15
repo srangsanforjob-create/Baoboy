@@ -116,7 +116,6 @@ function monthBubble(ym, orders) {
           txt(`วันที่ ${o.day} : ${lab}`, { weight: 'bold', color }),
           ...(o.items || []).map((i) => {
             let productName = P[i.pid]?.[0] || i.pid;
-            // เช็คและเติมคำว่า Support นำหน้าในรายการสรุปประจำเดือนหากเป็นสินค้าแถม
             if (i.isSupport || String(i.pid).startsWith('Sup')) {
               productName = `Support ${productName}`;
             }
@@ -180,27 +179,34 @@ function monthsMessage(list) {
 
 function confirmMessage(p, id) {
   const statusKey = SM[p.status] ? p.status : 'order';
+  // ready จะเป็น true ก็ต่อเมื่อทุกรายการจับคู่สินค้าได้ครบถ้วน (ไม่มีค่า null)
   const ready = p.items.length > 0 && p.items.every((i) => i.pid !== null);
   const body = [txt(SM[statusKey][0], { weight: 'bold', color: SM[statusKey][1] })];
   
   p.items.forEach((i, n) => {
     if (i.pid !== null) {
       let productName = P[i.pid]?.[0] || i.pid;
-      // เช็คและเติมคำว่า Support นำหน้าในหน้าพรีวิวคอนเฟิร์ม Order
       if (i.isSupport || String(i.pid).startsWith('Sup')) {
         productName = `Support ${productName}`;
       }
       return body.push(row(productName, i.q));
     }
-    body.push(txt(i.c && i.c.length ? `“${i.raw}” ×${i.q} ไม่ชัดเจน เลือกสินค้า:` : `ไม่พบสินค้า “${i.raw}”`, { color: '#B45309', size: 'sm', margin: 'md' }));
-    if (i.c && Array.isArray(i.c)) {
-      i.c.forEach((c) => body.push(btn(P[c]?.[0] || c, `a=pick&p=${id}&i=${n}&c=${c}`)));
-    }
-    body.push(btn('ข้ามรายการนี้', `a=skip&p=${id}&i=${n}`));
+    
+    // แจ้งเตือนเมื่อสินค้าไม่ชัดเจน และบังคับให้เลือกจากรายการตัวเลือก
+    body.push(txt(i.c && i.c.length ? `“${i.raw}” ×${i.q} ไม่ชัดเจน กรุณาเลือกสินค้า:` : `ไม่พบสินค้า “${i.raw}” กรุณาเลือกสินค้า:`, { color: '#B45309', size: 'sm', margin: 'md' }));
+    
+    const suggestList = (i.c && Array.isArray(i.c) && i.c.length > 0) ? i.c : P.map((_, idx) => idx).slice(0, 5);
+    suggestList.forEach((c) => {
+      body.push(btn(P[c]?.[0] || c, `a=pick&p=${id}&i=${n}&c=${c}`, 'secondary'));
+    });
+    
+    // เอาปุ่ม "ข้ามรายการนี้" ออกไปเรียบร้อยแล้ว ป้องกันออเดอร์ตกหล่น
   });
   
   body.push(hbox([btn('‹ เดือนก่อน', `a=mm&p=${id}&d=-1`), btn('เดือนถัดไป ›', `a=mm&p=${id}&d=1`)]));
-  const footer = [hbox([btn('ยกเลิก', `a=cancel&p=${id}`), ...(ready ? [btn('ยืนยัน', `a=ok&p=${id}`, 'primary')] : [])])];
+  
+  // ปุ่มยืนยันจะปรากฏขึ้นมาเมื่อทุกรายการถูกต้องสมบูรณ์แล้วเท่านั้น
+  const footer = [hbox([btn('ยกเลิก', `a=cancel&p=${id}`, 'link', '#DC2626'), ...(ready ? [btn('ยืนยัน', `a=ok&p=${id}`, 'primary', '#059669')] : [])])];
   
   return flex(`ยืนยัน Order วันที่ ${p.day}`, bubble(`ยืนยัน Order วันที่ ${p.day} · ${mlabel(p.ym)}`, '#1F2937', '#FFFFFF', body, footer));
 }
