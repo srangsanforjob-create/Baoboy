@@ -3,7 +3,7 @@ const express = require('express');
 const line = require('@line/bot-sdk');
 const db = require('./src/db');
 const { parse } = require('./src/catalog');
-const { resolveMonth, addMonths, mlabel, MN } = require('./src/months');
+const { resolveMonth, addMonths, mlabel } = require('./src/months');
 const { monthsMessage, confirmMessage } = require('./src/flex');
 
 const config = { channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN, channelSecret: process.env.LINE_CHANNEL_SECRET };
@@ -51,7 +51,6 @@ async function onPostback(ev) {
   const d = new URLSearchParams(ev.postback.data);
   const a = d.get('a');
 
-  // เพิ่มส่วนรองรับการเลือกสถานะโดยตรง (a === 'status')
   if (a === 'status') {
     const o = await db.updateOrderStatus(chat, +d.get('o'), d.get('s'));
     if (!o) return reply(ev.replyToken, [text('ไม่พบรายการนี้แล้ว')]);
@@ -104,8 +103,8 @@ app.post('/webhook', express.json({
       if (ev.type === 'message' && ev.message.type === 'text') return onText(ev);
       if (ev.type === 'postback') return onPostback(ev);
     }));
-  } catch (e) { 
-    console.error(e); 
+  } catch (e) {
+    console.error(e);
   }
   res.sendStatus(200);
 });
