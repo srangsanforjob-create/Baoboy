@@ -153,19 +153,54 @@ async function onText(ev) {
 
     if (parsedOrders.length === 0) return;
 
-    // เลือกรายการแรกมาทำ Confirm Card (และใช้ p.status ที่ติดมากับคำลงท้าย paid/bill ได้เลย)
-    const p = parsedOrders[0];
-    const id = await savePendingDb(chat, p);
-    
-    let replyText = `บันทึกรายการของวันที่ ${p.day} ครับ`;
-    if (parsedOrders.length > 1) {
-      replyText = `พบข้อมูลหลายวัน (ระบบเปิดหน้ายืนยันของวันที่ ${p.day} ให้ตรวจสอบก่อนครับ)`;
+    const autoSavedDays = [];
+    let ambiguousOrder = null;
+    let ambiguousId = null;
+
+    // ตรวจสอบแต่ละออเดอร์ว่ามีความกำกวม (ต้องเลือกสินค้าเพิ่ม) หรือไม่
+    for (const p of parsedOrders) {
+      const hasAmbiguousItem = p.items.some(i => i.pid === null);
+
+      if (!hasAmbiguousItem) {
+        // กรณีข้อมูลชัดเจน: บันทึกลงฐานข้อมูลทันทีอัตโนมัติ
+        const items = [];
+        p.items.forEach((i) => {
+          const e = items.find((x) => x.pid === i.pid && x.isSupport === !!i.isSupport);
+          if (e) e.q += i.q;
+          else items.push({ pid: i.pid, q: i.q, isSupport: !!i.isSupport });
+        });
+        const orderStatus = p.status || 'order';
+        await db.upsertOrder(chat, { ym: p.ym, day: p.day, status: orderStatus, items });
+        autoSavedDays.push(p.day);
+      } else {
+        // กรณีข้อมูลไม่ชัดเจน (มีตัวเลือกที่ต้องกดเลือกสินค้า): เก็บไว้ทำ Pending Card
+        const id = await savePendingDb(chat, p);
+        if (!ambiguousOrder) {
+          ambiguousOrder = p;
+          ambiguousId = id;
+        }
+      }
     }
 
+    // กรณีมีรายการที่ต้องให้ผู้ใช้เลือกสินค้า (กำกวม)
+    if (ambiguousOrder) {
+      let msg = `บันทึกวันที่ที่ชัดเจนแล้ว (${autoSavedDays.join(', ') || 'ไม่มี'})`;
+      if (autoSavedDays.length === 0) {
+        msg = `พบข้อมูลที่ต้องตรวจสอบเพิ่มเติมครับ`;
+      }
+      return reply(ev.replyToken, [
+        text(msg),
+        confirmMessage(ambiguousOrder, ambiguousId)
+      ]);
+    }
+
+    // กรณีทุกรายการถูกต้องครบถ้วน บันทึกสำเร็จทั้งหมดทันทีโดยไม่มีการ์ดเด้ง
+    const latestYm = parsedOrders[parsedOrders.length - 1].ym;
     return reply(ev.replyToken, [
-      text(replyText),
-      confirmMessage(p, id)
+      text(`✅ บันทึกออเดอร์สำเร็จทั้งหมด ${parsedOrders.length} รายการ (วันที่: ${autoSavedDays.join(', ')})`),
+      await monthMsg(chat, latestYm)
     ]);
+
   } catch (err) {
     console.error('onText error:', err);
     try {
