@@ -29,11 +29,13 @@ const getOrder = async (chat, id) =>
 
 // วันเดียว + สถานะเดียวกัน -> รวมจำนวน (แยก Support และปกติออกจากกันอย่างถูกต้อง)
 async function upsertOrder(chat, { ym, day, status, items }) {
+  const targetStatus = status || 'order';
+  
   const ex = (await q('select * from orders where chat_id=$1 and ym=$2 and day=$3 and status=$4',
-    [chat, ym, day, status])).rows[0];
+    [chat, ym, day, targetStatus])).rows[0];
   
   if (!ex) {
-    await q('insert into orders(chat_id,ym,day,status,items) values($1,$2,$3,$4,$5)', [chat, ym, day, status, JSON.stringify(items)]);
+    await q('insert into orders(chat_id,ym,day,status,items) values($1,$2,$3,$4,$5)', [chat, ym, day, targetStatus, JSON.stringify(items)]);
     return;
   }
 
