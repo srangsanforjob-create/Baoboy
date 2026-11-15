@@ -13,7 +13,6 @@ async function init() {
     status text not null, items jsonb not null, created_at timestamptz default now())`);
   await q('create index if not exists orders_chat_ym on orders(chat_id, ym)');
   
-  // เปลี่ยนชื่อตารางเป็น pending_orders ให้ตรงกับที่เรียกใช้งานใน server.js
   await q(`create table if not exists pending_orders(
     id text primary key, chat_id text not null, payload jsonb not null, created_at timestamptz default now())`);
   await q("delete from pending_orders where created_at < now() - interval '1 day'");
@@ -28,18 +27,25 @@ const monthsWithData = async (chat) =>
 const getOrder = async (chat, id) =>
   (await q('select * from orders where chat_id=$1 and id=$2', [chat, id])).rows[0];
 
-// วันเดียว + สถานะเดียวกัน -> รวมจำนวน
+// วันเดียว + สถานะเดียวกัน -> รวมจำนวน (แยก Support และปกติออกจากกันอย่างถูกต้อง)
 async function upsertOrder(chat, { ym, day, status, items }) {
   const ex = (await q('select * from orders where chat_id=$1 and ym=$2 and day=$3 and status=$4',
     [chat, ym, day, status])).rows[0];
+  
   if (!ex) {
     await q('insert into orders(chat_id,ym,day,status,items) values($1,$2,$3,$4,$5)', [chat, ym, day, status, JSON.stringify(items)]);
     return;
   }
-  const merged = ex.items;
+
+  const merged = ex.items || [];
   for (const i of items) {
-    const e = merged.find((x) => x.pid === i.pid);
-    if (e) e.q += i.q; else merged.push(i);
+    // เช็กทั้ง pid และ isSupport ให้ตรงกัน ถึงจะนำมารวมจำนวนกัน
+    const e = merged.find((x) => x.pid === i.pid && !!x.isSupport === !!i.isSupport);
+    if (e) {
+      e.q += i.q;
+    } else {
+      merged.push({ pid: i.pid, q: i.q, isSupport: !!i.isSupport });
+    }
   }
   await q('update orders set items=$1 where id=$2', [JSON.stringify(merged), ex.id]);
 }
@@ -58,7 +64,6 @@ async function deleteOrder(chat, id) {
   return o;
 }
 
-// ปรับให้ใช้ตาราง pending_orders และรองรับเงื่อนไข chat_id เพื่อความปลอดภัย
 async function savePending(chat, p) {
   const id = crypto.randomBytes(5).toString('hex');
   await q('insert into pending_orders(id,chat_id,payload) values($1,$2,$3)', [id, chat, JSON.stringify(p)]);
