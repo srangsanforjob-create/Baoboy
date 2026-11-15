@@ -1,4 +1,4 @@
-const { P } = require('./catalog');
+const { P, CATS } = require('./catalog');
 const { addMonths } = require('./months');
 
 const thaiMonthsFull = [
@@ -23,7 +23,7 @@ function formatMonthShort(ym) {
   return `${thaiMonthsShort[parseInt(m, 10)]} ${y.slice(-2)}`;
 }
 
-// 1. การ์ดยืนยันออเดอร์ + ตัวเลือกเดือน/ปี (Confirm & Month/Year Picker)
+// 1. การ์ดยืนยันออเดอร์ + ตัวเลือกเดือน/ปี
 function confirmMessage(order, pendingId) {
   const currentYm = order.ym;
   const quickMonths = [
@@ -209,7 +209,7 @@ function confirmMessage(order, pendingId) {
   };
 }
 
-// 2. การ์ดสรุปยอดรายเดือน พร้อมปุ่มเปลี่ยนสถานะครบถ้วนและยอดรวมด้านล่าง
+// 2. การ์ดสรุปยอดรายเดือน (ปุ่มมินิมอล สีชัดเจน แยกหมวดหมู่ครบถ้วน)
 function monthsMessage(monthList) {
   const bubbles = monthList.map(([ym, orders]) => {
     const statusMap = {
@@ -219,8 +219,8 @@ function monthsMessage(monthList) {
       paid: { label: 'จ่ายแล้ว', color: '#16A34A' }
     };
 
-    // คำนวณสรุปยอดรวมสินค้าแต่ละประเภทในเดือนนั้นๆ
-    const totals = {};
+    const normalTotals = {};
+    const amenityTotals = {};
     const supportTotals = {};
 
     const orderBoxes = [];
@@ -238,13 +238,17 @@ function monthsMessage(monthList) {
         const st = statusMap[o.status] || { label: o.status, color: '#64748B' };
         const itemsDesc = o.items
           .map((i) => {
-            const name = P[i.pid] ? P[i.pid][0] : 'สินค้า';
-            // สะสมยอดรวม
+            const prod = P[i.pid];
+            const name = prod ? prod[0] : 'สินค้า';
+            const cat = prod ? prod[1] : 'o';
+
             if (i.pid !== null) {
               if (i.isSupport) {
                 supportTotals[i.pid] = (supportTotals[i.pid] || 0) + i.q;
+              } else if (cat === 'amenity') {
+                amenityTotals[i.pid] = (amenityTotals[i.pid] || 0) + i.q;
               } else {
-                totals[i.pid] = (totals[i.pid] || 0) + i.q;
+                normalTotals[i.pid] = (normalTotals[i.pid] || 0) + i.q;
               }
             }
             return `${name} x${i.q}${i.isSupport ? ' (แถม)' : ''}`;
@@ -290,6 +294,7 @@ function monthsMessage(monthList) {
               wrap: true,
               margin: 'xs'
             },
+            // ปุ่มมินิมอลเรียงในแถวเดียว พร้อมสีสันชัดเจนตามสถานะ
             {
               type: 'box',
               layout: 'horizontal',
@@ -298,17 +303,19 @@ function monthsMessage(monthList) {
               contents: [
                 {
                   type: 'button',
-                  style: 'secondary',
+                  style: o.status === 'order' ? 'primary' : 'secondary',
+                  color: o.status === 'order' ? '#D97706' : '#F1F5F9',
                   height: 'sm',
                   action: {
                     type: 'postback',
-                    label: 'รอจัดส่ง',
+                    label: 'รอส่ง',
                     data: `a=status&o=${o.id}&s=order`
                   }
                 },
                 {
                   type: 'button',
-                  style: 'secondary',
+                  style: o.status === 'done' ? 'primary' : 'secondary',
+                  color: o.status === 'done' ? '#059669' : '#F1F5F9',
                   height: 'sm',
                   action: {
                     type: 'postback',
@@ -318,7 +325,8 @@ function monthsMessage(monthList) {
                 },
                 {
                   type: 'button',
-                  style: 'secondary',
+                  style: o.status === 'paid' ? 'primary' : 'secondary',
+                  color: o.status === 'paid' ? '#16A34A' : '#F1F5F9',
                   height: 'sm',
                   action: {
                     type: 'postback',
@@ -329,6 +337,7 @@ function monthsMessage(monthList) {
                 {
                   type: 'button',
                   style: 'secondary',
+                  color: '#FEE2E2',
                   height: 'sm',
                   action: {
                     type: 'postback',
@@ -343,34 +352,23 @@ function monthsMessage(monthList) {
       });
     }
 
-    // สร้างกล่องสรุปยอดรวมสินค้าด้านล่างการ์ด
-    const summaryContents = [
-      {
-        type: 'separator',
-        margin: 'md'
-      },
-      {
-        type: 'text',
-        text: '📦 ยอดรวมประจำเดือน:',
-        weight: 'bold',
-        size: 'sm',
-        color: '#0F172A',
-        margin: 'md'
-      }
-    ];
+    const buildCategorySummary = (title, color, totalsObj) => {
+      const entries = Object.entries(totalsObj);
+      if (entries.length === 0) return [];
 
-    const totalEntries = Object.entries(totals);
-    if (totalEntries.length === 0) {
-      summaryContents.push({
-        type: 'text',
-        text: '- ไม่มีข้อมูลยอดรวม -',
-        size: 'xs',
-        color: '#94A3B8',
-        margin: 'xs'
-      });
-    } else {
-      totalEntries.forEach(([pid, qty]) => {
-        summaryContents.push({
+      const boxContents = [
+        {
+          type: 'text',
+          text: title,
+          weight: 'bold',
+          size: 'xs',
+          color: color,
+          margin: 'md'
+        }
+      ];
+
+      entries.forEach(([pid, qty]) => {
+        boxContents.push({
           type: 'box',
           layout: 'horizontal',
           margin: 'xs',
@@ -394,45 +392,27 @@ function monthsMessage(monthList) {
           ]
         });
       });
-    }
 
-    // แสดงยอด Support (แถม) ถ้ามี
-    const supportEntries = Object.entries(supportTotals);
-    if (supportEntries.length > 0) {
-      summaryContents.push({
+      return boxContents;
+    };
+
+    const summaryContents = [
+      {
+        type: 'separator',
+        margin: 'md'
+      },
+      {
         type: 'text',
-        text: '🎁 ยอด Support (แถม):',
+        text: '📊 ยอดรวมประจำเดือน',
         weight: 'bold',
-        size: 'xs',
-        color: '#D97706',
-        margin: 'sm'
-      });
-      supportEntries.forEach(([pid, qty]) => {
-        summaryContents.push({
-          type: 'box',
-          layout: 'horizontal',
-          margin: 'xs',
-          contents: [
-            {
-              type: 'text',
-              text: P[pid] ? P[pid][0] : 'สินค้า',
-              size: 'xs',
-              color: '#64748B',
-              flex: 4
-            },
-            {
-              type: 'text',
-              text: `${qty}`,
-              size: 'xs',
-              weight: 'bold',
-              color: '#D97706',
-              align: 'end',
-              flex: 1
-            }
-          ]
-        });
-      });
-    }
+        size: 'sm',
+        color: '#0F172A',
+        margin: 'md'
+      },
+      ...buildCategorySummary('📦 สินค้าปกติ:', '#0F172A', normalTotals),
+      ...buildCategorySummary('🍺 ยอดเบิก Amenity:', '#2563EB', amenityTotals),
+      ...buildCategorySummary('🎁 ยอด Support (ของแถม):', '#D97706', supportTotals)
+    ];
 
     return {
       type: 'bubble',
