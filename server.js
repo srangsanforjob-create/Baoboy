@@ -140,6 +140,7 @@ async function onText(ev) {
     const p = parse(t);
     if (!p) return;
     p.ym = ymFor(p.day);
+    p.status = 'order'; // เซ็ตสถานะเริ่มต้นตรงนี้ให้ปลอดภัย
     const id = await savePendingDb(chat, p);
     return reply(ev.replyToken, [confirmMessage(p, id)]);
   } catch (err) {
@@ -194,7 +195,9 @@ async function onPostback(ev) {
           if (e) e.q += i.q;
           else items.push({ pid: i.pid, q: i.q, isSupport: !!i.isSupport });
         });
-      await db.upsertOrder(chat, { ym: p.ym, day: p.day, status: p.status, items });
+      
+      const orderStatus = p.status || 'order';
+      await db.upsertOrder(chat, { ym: p.ym, day: p.day, status: orderStatus, items });
       await deletePendingDb(chat, id);
       return reply(ev.replyToken, [await monthMsg(chat, p.ym)]);
     }
