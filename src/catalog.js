@@ -1,12 +1,12 @@
-// สินค้า + การจับคำใกล้เคียง (ไทย/อังกฤษ/พิมพ์ผิด) + แยกข้อความออเดอร์
-const CATS = { d: 'เบียร์สด (ถัง)', b: 'เบียร์ขวด/กระป๋อง', amenity: 'Amenity', o: 'สินค้าอื่นๆ', support: 'Support' };
-// [ชื่อ, หมวด, คีย์เวิร์ดเพิ่มเติม]
+// สินค้า + การจับคำใกล้เคียง (รองรับพิมพ์เล็ก/ใหญ่ และการเว้นวรรค)
+const CATS = { d: 'เบียร์สด (ถัง)', b: 'เบียร์ขวด/กระป๋อง', amenity: 'ยอดเบิก Amenity สะสม', o: 'สินค้าอื่นๆ', support: 'Support' };
+
 const P = [
   // เบียร์สด
   ['Lager สด', 'd', 'ลาเกอร์ draft'], ['Rose สด', 'd', 'โรเซ่ โรเซ draft'], ['Dunkel สด', 'd', 'ดังเคล ดันเคล draft'],
   // เบียร์ขวด/กระป๋อง
   ['Lager ขวด 620ml', 'b', 'ลาเกอร์ bottle'], ['Dunkel ขวด 620ml', 'b', 'ดังเคล ดังเคล bottle'],
-  ['Lager กระป๋อง 490ml', 'b', 'ลาเกอร์ can'], ['Dunkel กระป๋อง 490ml', 'b', 'ดังเคล ดันเคล can'],
+  ['Lager กระป๋อง 490ml', 'b', 'ลาเกอร์ can'], ['Dunkel กระป๋อง 490ml', 'b', 'ดังเคล ดังเคล can'],
   ['Weizen กระป๋อง 490ml', 'b', 'ไวเซ่น ไวเซน can'], ['Rose กระป๋อง 490ml', 'b', 'โรเซ่ โรเซ can'],
   ['IPA กระป๋อง 490ml', 'b', 'ไอพีเอ can'], ['PATTAYA กระป๋อง 490ml', 'b', 'พัทยา can'], ['PHUKET กระป๋อง 490ml', 'b', 'ภูเก็ต can'],
   // Amenity
@@ -23,6 +23,7 @@ const P = [
   ['Soju Taeyang องุ่น 360ml', 'o', 'โซจู แทยัง grape'], ['Soju Taeyang สตรอเบอรี่ 360ml', 'o', 'โซจู แทยัง strawberry'],
   ['Soju Taeyang เกรปฟรุ๊ต 360ml', 'o', 'โซจู แทยัง grapefruit'],
 ];
+
 const PT = P.map((p) => (p[0] + ' ' + p[2]).toLowerCase().split(/\s+/));
 const ST = {
   order: 'order', ออเดอร์: 'order', ออเดอ: 'order',
@@ -39,6 +40,7 @@ function lev(a, b) {
       m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
   return m[a.length][b.length];
 }
+
 function sim(q, t) {
   if (q === t) return 1;
   if (q.length >= 2 && t.startsWith(q)) return 0.9;
@@ -49,7 +51,7 @@ function sim(q, t) {
   return 0;
 }
 
-// ฟังก์ชันจับคู่สินค้า พร้อมตรวจจับคำว่า support, sup, แถม และรหัสย่อ M, P, J, T
+// ฟังก์ชันจับคู่สินค้า (รองรับตัวย่อ M, P, J, T และคำว่า support/แถม แบบไม่สนตัวพิมพ์เล็กใหญ่)
 function match(raw) {
   let cleanRaw = raw.toLowerCase().trim();
   let isSupport = false;
@@ -60,8 +62,6 @@ function match(raw) {
   }
 
   const r = cleanRaw;
-  
-  // รองรับรหัสย่อพิเศษสำหรับเบียร์สดและ Amenity (m, p, j, t)
   const codeMap = { l: 0, r: 1, d: 2, m: 12, p: 13, j: 14, t: 15 };
   const code = codeMap[r];
   if (code !== undefined) return { pid: code, c: [], isSupport };
@@ -75,22 +75,49 @@ function match(raw) {
   return { pid: null, c: sc.slice(0, 5).map((x) => x[0]), isSupport };
 }
 
-// แยกข้อความออเดอร์
+// ฟังก์ชันแยกข้อความออเดอร์ (จัดการช่องว่างเกิน และคำลงท้าย paid / bill)
 function parse(text) {
-  const toks = text.trim().split(/\s+/);
-  if (!/^\d{1,2}$/.test(toks[0])) return null;
+  const toks = text.trim().split(/\s+/).filter(Boolean);
+  if (toks.length === 0 || !/^\d{1,2}$/.test(toks[0])) return null;
+  
   const day = +toks[0];
   if (day < 1 || day > 31) return null;
-  let status = 'order';
+
+  let status = 'order'; // Default เป็นรอจัดส่ง
+  const lastToken = toks[toks.length - 1].toLowerCase();
+  
+  if (lastToken === 'paid') {
+    status = 'paid';
+    toks.pop();
+  } else if (lastToken === 'bill') {
+    status = 'delivery'; // bill = รอชำระ (delivery)
+    toks.pop();
+  }
+
   const rest = [];
-  toks.slice(1).forEach((t) => { const l = t.toLowerCase(); if (ST[l]) status = ST[l]; else rest.push(t); });
+  toks.slice(1).forEach((t) => { 
+    const l = t.toLowerCase(); 
+    if (ST[l]) {
+      status = ST[l]; 
+    } else {
+      rest.push(t); 
+    } 
+  });
+
   const items = [];
   let q = [];
   for (const t of rest) {
     const m = t.match(/^([A-Za-zก-๙.]+)(\d+)$/);
-    if (m) { q.push(m[1]); items.push({ raw: q.join(' '), q: +m[2] }); q = []; }
-    else if (/^\d+$/.test(t) && q.length) { items.push({ raw: q.join(' '), q: +t }); q = []; }
-    else q.push(t);
+    if (m) { 
+      q.push(m[1]); 
+      items.push({ raw: q.join(' '), q: +m[2] }); 
+      q = []; 
+    } else if (/^\d+$/.test(t) && q.length) { 
+      items.push({ raw: q.join(' '), q: +t }); 
+      q = []; 
+    } else {
+      q.push(t);
+    }
   }
   if (q.length) items.push({ raw: q.join(' '), q: 1 });
   if (!items.length) return null;
