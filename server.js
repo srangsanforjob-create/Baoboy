@@ -123,7 +123,7 @@ async function onSummary(ev, chat, rest) {
     if (r.kind === 'ok') return reply(ev.replyToken, [await monthMsg(chat, r.ym)]);
     if (r.kind === 'ask') return reply(ev.replyToken, [text('หมายถึงสรุปของเดือนไหนครับ?', r.options.map(ymQuick))]);
     const recent = (yms.length ? yms : [todayYm()]).slice(-4).map(ymQuick);
-    return reply(ev.replyToken, [text(`ไม่แน่ใจว่าเดือนไหน ลองพิมพ์เช่น สรุป Nov / สรุป พ.ย. / สรุป เดือนหน้า`, recent)]);
+    return reply(ev.replyToken, [text(`ไม่แน่ใจว่าเดือนไหน ลองพิมพ์เช่น สรุป Nov / สรุป พ.ย. /สรุป เดือนหน้า`, recent)]);
   } catch (err) {
     console.error('onSummary error:', err);
     return reply(ev.replyToken, [text('เกิดข้อผิดพลาดในการดึงข้อมูลสรุป')]);
@@ -190,9 +190,9 @@ async function onPostback(ev) {
       p.items
         .filter((i) => i.pid !== null)
         .forEach((i) => {
-          const e = items.find((x) => x.pid === i.pid);
+          const e = items.find((x) => x.pid === i.pid && x.isSupport === !!i.isSupport);
           if (e) e.q += i.q;
-          else items.push({ pid: i.pid, q: i.q });
+          else items.push({ pid: i.pid, q: i.q, isSupport: !!i.isSupport });
         });
       await db.upsertOrder(chat, { ym: p.ym, day: p.day, status: p.status, items });
       await deletePendingDb(chat, id);
@@ -200,7 +200,6 @@ async function onPostback(ev) {
     }
 
     if (a === 'pick') p.items[+d.get('i')].pid = +d.get('c');
-    else if (a === 'skip') p.items.splice(+d.get('i'), 1);
     else if (a === 'mm') p.ym = addMonths(p.ym, +d.get('d'));
 
     await updatePendingDb(chat, id, p);
