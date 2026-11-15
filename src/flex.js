@@ -209,7 +209,7 @@ function confirmMessage(order, pendingId) {
   };
 }
 
-// 2. การ์ดสรุปยอดรายเดือน (รอจัดส่ง: ส้ม | รอชำระ: แดง | ชำระแล้ว: เขียว)
+// 2. การ์ดสรุปยอดรายเดือน (เพิ่มยอดรวมเบียร์สด L, R, D แยกในสินค้าปกติ)
 function monthsMessage(monthList) {
   const bubbles = monthList.map(([ym, orders]) => {
     const statusMap = {
@@ -221,6 +221,7 @@ function monthsMessage(monthList) {
     const normalTotals = {};
     const amenityTotals = {};
     const supportTotals = {};
+    let draftTotal = 0; // ตัวแปรเก็บผลรวมเบียร์สด (L, R, D)
 
     const orderBoxes = [];
     if (!orders || orders.length === 0) {
@@ -239,7 +240,7 @@ function monthsMessage(monthList) {
           .map((i) => {
             const prod = P[i.pid];
             const name = prod ? prod[0] : 'สินค้า';
-            const cat = prod ? prod[1] : 'o';
+            const cat = prod ? prod[1] : 'o'; // หมวดหมู่สินค้า เช่น 'd' (เบียร์สด), 'amenity', 'o'
 
             if (i.pid !== null) {
               if (i.isSupport) {
@@ -248,6 +249,10 @@ function monthsMessage(monthList) {
                 amenityTotals[i.pid] = (amenityTotals[i.pid] || 0) + i.q;
               } else {
                 normalTotals[i.pid] = (normalTotals[i.pid] || 0) + i.q;
+                // ถ้าเป็นหมวดเบียร์สด (d) นำมารวมเข้ายอดเบียร์สด L, R, D
+                if (cat === 'd') {
+                  draftTotal += i.q;
+                }
               }
             }
             return `${name} x${i.q}${i.isSupport ? ' (แถม)' : ''}`;
@@ -394,6 +399,80 @@ function monthsMessage(monthList) {
       return boxContents;
     };
 
+    // สร้างกล่องสรุปหมวดสินค้าปกติ พร้อมแสดงยอดรวมเบียร์สด L, R, D ด้านบนสุดของหมวด
+    const buildNormalCategorySummary = () => {
+      const entries = Object.entries(normalTotals);
+      if (entries.length === 0 && draftTotal === 0) return [];
+
+      const boxContents = [
+        {
+          type: 'text',
+          text: '📦 สินค้าปกติ:',
+          weight: 'bold',
+          size: 'xs',
+          color: '#0F172A',
+          margin: 'md'
+        }
+      ];
+
+      // แสดงยอดรวมเบียร์สด (L, R, D) เป็นบรรทัดแรกของหมวดสินค้าปกติ
+      if (draftTotal > 0) {
+        boxContents.push({
+          type: 'box',
+          layout: 'horizontal',
+          margin: 'xs',
+          contents: [
+            {
+              type: 'text',
+              text: '🍺 ยอดรวมเบียร์สด (L, R, D):',
+              size: 'xs',
+              weight: 'bold',
+              color: '#0284C7',
+              flex: 4
+            },
+            {
+              type: 'text',
+              text: `${draftTotal}`,
+              size: 'xs',
+              weight: 'bold',
+              color: '#0284C7',
+              align: 'end',
+              flex: 1
+            }
+          ]
+        });
+      }
+
+      // แสดงรายการสินค้าปกติแต่ละตัวต่อท้าย
+      entries.forEach(([pid, qty]) => {
+        boxContents.push({
+          type: 'box',
+          layout: 'horizontal',
+          margin: 'xs',
+          contents: [
+            {
+              type: 'text',
+              text: P[pid] ? P[pid][0] : 'สินค้า',
+              size: 'xs',
+              color: '#334155',
+              flex: 4
+            },
+            {
+              type: 'text',
+              text: `${qty}`,
+              size: 'xs',
+              weight: 'bold',
+              color: '#0F172A',
+              align: 'end',
+              flex: 1
+            }
+          ]
+        });
+      });
+
+      return boxContents;
+    };
+
     const summaryContents = [
       {
         type: 'separator',
@@ -407,7 +486,7 @@ function monthsMessage(monthList) {
         color: '#0F172A',
         margin: 'md'
       },
-      ...buildCategorySummary('📦 สินค้าปกติ:', '#0F172A', normalTotals),
+      ...buildNormalCategorySummary(),
       ...buildCategorySummary('🍺 ยอดเบิก Amenity:', '#2563EB', amenityTotals),
       ...buildCategorySummary('🎁 ยอด Support (ของแถม):', '#D97706', supportTotals)
     ];
