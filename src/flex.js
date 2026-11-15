@@ -1,228 +1,361 @@
 const { P } = require('./catalog');
+const { addMonths } = require('./months');
 
-const SM = {
-  order: ['รอจัดส่ง', '#B45309'],
-  delivery: ['จัดส่งแล้วรอชำระ', '#1D4ED8'],
-  paid: ['ชำระเงินแล้ว', '#059669'],
-};
+const thaiMonthsFull = [
+  '', 'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+];
 
-const CATS = {
-  d: 'เบียร์สด (ถัง)',
-  b: 'เบียร์ขวด/กระป๋อง',
-  amenity: 'ยอดเบิก Amenity สะสม',
-  o: 'สินค้าอื่นๆ',
-  support: 'Support',
-  e: 'Equipment',
-  p: 'POSM',
-};
+const thaiMonthsShort = [
+  '', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+];
 
-function txt(text, opts = {}) {
-  return {
-    type: 'text',
-    text: text,
-    size: opts.size || 'sm',
-    color: opts.color || '#111827',
-    weight: opts.weight || 'regular',
-    margin: opts.margin || 'none',
-  };
-}
-
-function row(label, qty, opts = {}) {
-  return {
-    type: 'box',
-    layout: 'horizontal',
-    margin: opts.margin || 'xs',
-    contents: [
-      { type: 'text', text: label, size: 'sm', color: opts.color || '#374151', flex: 5 },
-      { type: 'text', text: String(qty), size: 'sm', color: opts.color || '#111827', align: 'end', flex: 1, weight: opts.weight || 'bold' },
-    ],
-  };
-}
-
-function btn(label, data, style = 'primary', color = undefined) {
-  return {
-    type: 'button',
-    action: { type: 'postback', label, data },
-    style,
-    color,
-    height: 'xs',
-    flex: 1,
-  };
-}
-
-function hbox(contents) {
-  return { type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'md', contents };
-}
-
-const sep = { type: 'separator', margin: 'md' };
-
-function mlabel(ym) {
+function formatMonthFull(ym) {
+  if (!ym) return '';
   const [y, m] = ym.split('-');
-  const months = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
-  return `${months[parseInt(m, 10) - 1]} ${parseInt(y, 10) + 543}`;
+  return `${thaiMonthsFull[parseInt(m, 10)]} ${y}`;
 }
 
-function bubble(title, headerBg, headerTxtColor, bodyContents, footerContents = null) {
-  return {
-    type: 'bubble',
-    size: 'mega',
-    header: {
-      type: 'box',
-      layout: 'vertical',
-      backgroundColor: headerBg,
-      contents: [{ type: 'text', text: title, color: headerTxtColor, weight: 'bold', size: 'md' }],
-    },
-    body: {
-      type: 'box',
-      layout: 'vertical',
-      paddingAll: 'md',
-      contents: bodyContents,
-    },
-    ...(footerContents ? { footer: { type: 'box', layout: 'vertical', contents: footerContents } } : {}),
-  };
+function formatMonthShort(ym) {
+  if (!ym) return '';
+  const [y, m] = ym.split('-');
+  return `${thaiMonthsShort[parseInt(m, 10)]} ${y.slice(-2)}`;
 }
 
-function monthBubble(ym, orders) {
-  const body = [];
-  let barrels = 0;
-  const tally = {};
-  const amenityTally = {}; // เก็บยอดเบิก Amenity ทุกสถานะทันทีที่คีย์
-  let pendingPaymentCount = 0;
-  let supportCount = 0;
+// 1. การ์ดยืนยันออเดอร์ + ตัวเลือกเดือน/ปี (Confirm & Month/Year Picker)
+function confirmMessage(order, pendingId) {
+  const currentYm = order.ym;
+  // สร้างตัวเลือก 4 เดือนรอบๆ เดือนปัจจุบันสำหรับปุ่มลัด
+  const quickMonths = [
+    addMonths(currentYm, -1),
+    currentYm,
+    addMonths(currentYm, 1),
+    addMonths(currentYm, 2)
+  ];
 
-  if (!orders || !orders.length) {
-    body.push(txt('ยังไม่มีออเดอร์ในเดือนนี้', { color: '#6B7280' }));
-  } else {
-    orders.forEach((o) => {
-      const currentStatus = SM[o.status] ? o.status : 'order';
-      const [lab, color] = SM[currentStatus];
-
-      if (o.status === 'delivery') {
-        pendingPaymentCount++;
+  // สร้างปุ่มลัดเดือน/ปี 4 ปุ่ม
+  const quickMonthButtons = quickMonths.map((ym) => {
+    const isSelected = ym === currentYm;
+    return {
+      type: 'button',
+      style: isSelected ? 'primary' : 'secondary',
+      color: isSelected ? '#1DB446' : '#E2E8F0',
+      height: 'sm',
+      action: {
+        type: 'postback',
+        label: formatMonthShort(ym),
+        data: `a=setym&p=${pendingId}&ym=${ym}`
       }
+    };
+  });
 
-      if (o.items && Array.isArray(o.items)) {
-        o.items.forEach((i) => {
-          const productCode = i.pid;
-          if (productCode !== null && (String(productCode).startsWith('Sup') || i.isSupport || P?.[i.pid]?.[1] === 'support')) {
-            supportCount += i.q;
-          }
+  // สร้างรายการสินค้าในบิล (ถ้ามีตัวกำกวมจะแสดงปุ่มให้กดเลือก)
+  const itemRows = [];
+  order.items.forEach((item, idx) => {
+    const prodName = item.pid !== null ? P[item.pid][0] : `❓ "${item.raw}" (เลือกสินค้า)`;
+    itemRows.push({
+      type: 'box',
+      layout: 'horizontal',
+      margin: 'sm',
+      contents: [
+        {
+          type: 'text',
+          text: `${prodName}${item.isSupport ? ' [แถม]' : ''}`,
+          size: 'sm',
+          color: item.pid !== null ? '#1E293B' : '#DC2626',
+          weight: item.pid !== null ? 'regular' : 'bold',
+          flex: 4,
+          wrap: true
+        },
+        {
+          type: 'text',
+          text: `x${item.q}`,
+          size: 'sm',
+          color: '#475569',
+          weight: 'bold',
+          align: 'end',
+          flex: 1
+        }
+      ]
+    });
 
-          // ถ้ารายการนี้เป็นหมวด Amenity ให้บวกยอดสะสมทันทีทุกสถานะ
-          if (productCode !== null && P[productCode]?.[1] === 'amenity') {
-            amenityTally[productCode] = (amenityTally[productCode] || 0) + i.q;
-          }
-        });
-      }
-
-      body.push({
+    // กรณีสินค้ากำกวม (pid === null) ให้สร้างปุ่มตัวเลือกสินค้าขึ้นมาให้กด
+    if (item.pid === null && item.c && item.c.length > 0) {
+      const choiceButtons = item.c.slice(0, 3).map((cid) => ({
+        type: 'button',
+        style: 'secondary',
+        height: 'sm',
+        margin: 'xs',
+        action: {
+          type: 'postback',
+          label: P[cid][0].slice(0, 20),
+          data: `a=pick&p=${pendingId}&i=${idx}&c=${cid}`
+        }
+      }));
+      itemRows.push({
         type: 'box',
         layout: 'vertical',
-        spacing: 'xs',
-        margin: 'md',
+        margin: 'xs',
+        contents: choiceButtons
+      });
+    }
+  });
+
+  return {
+    type: 'flex',
+    altText: `ยืนยันออเดอร์วันที่ ${order.day} (${formatMonthFull(currentYm)})`,
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#0F172A',
+        paddingAll: 'md',
         contents: [
-          txt(`วันที่ ${o.day} : ${lab}`, { weight: 'bold', color }),
-          ...(o.items || []).map((i) => {
-            let productName = P[i.pid]?.[0] || i.pid;
-            if (i.isSupport || String(i.pid).startsWith('Sup')) {
-              productName = `Support ${productName}`;
-            }
-            return row(productName, i.q);
-          }),
+          {
+            type: 'text',
+            text: '📅 ระบุเดือน/ปี และตรวจสอบรายการ',
+            color: '#94A3B8',
+            size: 'xs',
+            weight: 'bold'
+          },
+          {
+            type: 'text',
+            text: `วันที่ ${order.day} ${formatMonthFull(currentYm)}`,
+            color: '#FFFFFF',
+            size: 'lg',
+            weight: 'bold',
+            margin: 'xs'
+          }
+        ]
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          // แถวปุ่มเลื่อนเดือน ซ้าย-ขวา
           {
             type: 'box',
             layout: 'horizontal',
             spacing: 'sm',
-            margin: 'sm',
             contents: [
-              btn('รอส่ง', `a=status&o=${o.id}&s=order`, 'secondary'),
-              btn('ส่งแล้ว', `a=status&o=${o.id}&s=delivery`, 'primary', '#D97706'),
-              btn('จ่ายแล้ว', `a=status&o=${o.id}&s=paid`, 'primary', '#059669'),
-            ],
+              {
+                type: 'button',
+                style: 'secondary',
+                height: 'sm',
+                action: {
+                  type: 'postback',
+                  label: '◀ เดือนก่อน',
+                  data: `a=mm&p=${pendingId}&d=-1`
+                }
+              },
+              {
+                type: 'button',
+                style: 'secondary',
+                height: 'sm',
+                action: {
+                  type: 'postback',
+                  label: 'เดือนหน้า ▶',
+                  data: `a=mm&p=${pendingId}&d=1`
+                }
+              }
+            ]
           },
+          // แถวปุ่มลัดเลือกเดือน/ปี ทันที
           {
             type: 'box',
             layout: 'horizontal',
-            margin: 'xs',
-            contents: [
-              btn('ลบ', `a=del&o=${o.id}`, 'link', '#DC2626')
-            ],
+            spacing: 'xs',
+            margin: 'sm',
+            contents: quickMonthButtons
           },
-        ],
-      });
-      body.push(sep);
-
-      // สำหรับยอดขายปกติ (นับเฉพาะที่จ่ายแล้ว และไม่ใช่ Amenity)
-      if (o.status === 'paid' && o.items && Array.isArray(o.items)) {
-        o.items.forEach((i) => {
-          if (P[i.pid]?.[1] !== 'amenity') {
-            tally[i.pid] = (tally[i.pid] || 0) + i.q;
-            if (P[i.pid]?.[1] === 'd') {
-              barrels += i.q;
+          {
+            type: 'separator',
+            margin: 'md'
+          },
+          {
+            type: 'text',
+            text: 'รายการสินค้า:',
+            size: 'xs',
+            color: '#64748B',
+            weight: 'bold',
+            margin: 'md'
+          },
+          ...itemRows
+        ]
+      },
+      footer: {
+        type: 'box',
+        layout: 'horizontal',
+        spacing: 'sm',
+        contents: [
+          {
+            type: 'button',
+            style: 'secondary',
+            action: {
+              type: 'postback',
+              label: '❌ ยกเลิก',
+              data: `a=cancel&p=${pendingId}`
+            }
+          },
+          {
+            type: 'button',
+            style: 'primary',
+            color: '#1DB446',
+            action: {
+              type: 'postback',
+              label: '✅ ยืนยันบันทึก',
+              data: `a=ok&p=${pendingId}`
             }
           }
+        ]
+      }
+    }
+  };
+}
+
+// 2. การ์ดสรุปยอดรายเดือน (Summary Flex Message)
+function monthsMessage(monthList) {
+  const bubbles = monthList.map(([ym, orders]) => {
+    const statusMap = {
+      order: { label: 'รอจัดส่ง', color: '#D97706' },
+      delivery: { label: 'รอชำระ', color: '#2563EB' },
+      done: { label: 'ส่งแล้ว', color: '#059669' },
+      paid: { label: 'จ่ายแล้ว', color: '#16A34A' }
+    };
+
+    const orderBoxes = [];
+    if (!orders || orders.length === 0) {
+      orderBoxes.push({
+        type: 'text',
+        text: 'ยังไม่มีรายการออเดอร์ในเดือนนี้',
+        size: 'sm',
+        color: '#94A3B8',
+        align: 'center',
+        margin: 'lg'
+      });
+    } else {
+      orders.forEach((o) => {
+        const st = statusMap[o.status] || { label: o.status, color: '#64748B' };
+        const itemsDesc = o.items
+          .map((i) => {
+            const name = P[i.pid] ? P[i.pid][0] : 'สินค้า';
+            return `${name} x${i.q}${i.isSupport ? ' (แถม)' : ''}`;
+          })
+          .join('\n');
+
+        orderBoxes.push({
+          type: 'box',
+          layout: 'vertical',
+          backgroundColor: '#F8FAFC',
+          cornerRadius: 'md',
+          paddingAll: 'sm',
+          margin: 'sm',
+          contents: [
+            {
+              type: 'box',
+              layout: 'horizontal',
+              contents: [
+                {
+                  type: 'text',
+                  text: `วันที่ ${o.day}`,
+                  weight: 'bold',
+                  size: 'sm',
+                  color: '#0F172A',
+                  flex: 2
+                },
+                {
+                  type: 'text',
+                  text: `● ${st.label}`,
+                  size: 'xs',
+                  weight: 'bold',
+                  color: st.color,
+                  align: 'end',
+                  flex: 3
+                }
+              ]
+            },
+            {
+              type: 'text',
+              text: itemsDesc,
+              size: 'xs',
+              color: '#334155',
+              wrap: true,
+              margin: 'xs'
+            },
+            {
+              type: 'box',
+              layout: 'horizontal',
+              spacing: 'xs',
+              margin: 'sm',
+              contents: [
+                {
+                  type: 'button',
+                  style: 'secondary',
+                  height: 'sm',
+                  action: {
+                    type: 'postback',
+                    label: 'เปลี่ยนสถานะ',
+                    data: `a=next&o=${o.id}`
+                  }
+                },
+                {
+                  type: 'button',
+                  style: 'secondary',
+                  height: 'sm',
+                  action: {
+                    type: 'postback',
+                    label: 'ลบ',
+                    data: `a=del&o=${o.id}`
+                  }
+                }
+              ]
+            }
+          ]
         });
-      }
-    });
-  }
-
-  body.push(txt(`📦 ค้างชำระ: ${pendingPaymentCount} รายการ`, { weight: 'bold', color: '#B45309', margin: 'md' }));
-  body.push(txt(`🎁 Support รวม: ${supportCount} ชิ้น`, { weight: 'bold', color: '#D97706', margin: 'sm' }));
-  body.push(txt(`รวม ${barrels} ถัง (รับเฉพาะที่ชำระแล้ว)`, { weight: 'bold', margin: 'md' }));
-  body.push(sep);
-  body.push(txt('📊 สรุปยอดสะสม', { weight: 'bold', margin: 'md' }));
-
-  // แสดงยอดขายเบียร์ (เฉพาะจ่ายแล้ว)
-  ['d', 'b', 'o'].forEach((c) => {
-    const ps = Object.keys(tally).filter((i) => P[i]?.[1] === c);
-    if (ps.length > 0 || ['d', 'b'].includes(c)) {
-      body.push(row(CATS[c], ps.reduce((a, i) => a + tally[i], 0), { weight: 'bold', margin: 'sm' }));
-      ps.forEach((i) => body.push(row('• ' + P[i][0], tally[i], { color: '#6B7280' })));
+      });
     }
+
+    return {
+      type: 'bubble',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#1DB446',
+        paddingAll: 'md',
+        contents: [
+          {
+            type: 'text',
+            text: `📊 สรุปออเดอร์ประจำเดือน`,
+            color: '#DCFCE7',
+            size: 'xs',
+            weight: 'bold'
+          },
+          {
+            type: 'text',
+            text: formatMonthFull(ym),
+            color: '#FFFFFF',
+            size: 'lg',
+            weight: 'bold',
+            margin: 'xs'
+          }
+        ]
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        contents: orderBoxes
+      }
+    };
   });
 
-  // แสดงยอดเบิก Amenity สะสม (รวมทุกสถานะทันทีที่คีย์)
-  const amenityKeys = Object.keys(amenityTally);
-  const totalAmenityQty = amenityKeys.reduce((a, i) => a + amenityTally[i], 0);
-  body.push(row(CATS['amenity'], totalAmenityQty, { weight: 'bold', margin: 'sm' }));
-  amenityKeys.forEach((i) => body.push(row('• ' + P[i][0], amenityTally[i], { color: '#6B7280' })));
-
-  return bubble(`📋 สรุป Order เดือน ${mlabel(ym)}`, '#06C755', '#04301A', body);
-}
-
-const flex = (altText, contents) => ({ type: 'flex', altText, contents });
-
-function monthsMessage(list) {
-  const bs = list.map(([ym, orders]) => monthBubble(ym, orders));
-  return flex(`สรุป Order ${list.map(([ym]) => mlabel(ym)).join(', ')}`, bs.length === 1 ? bs[0] : { type: 'carousel', contents: bs });
-}
-
-function confirmMessage(p, id) {
-  const statusKey = SM[p.status] ? p.status : 'order';
-  const ready = p.items.length > 0 && p.items.every((i) => i.pid !== null);
-  const body = [txt(SM[statusKey][0], { weight: 'bold', color: SM[statusKey][1] })];
-  
-  p.items.forEach((i, n) => {
-    if (i.pid !== null) {
-      let productName = P[i.pid]?.[0] || i.pid;
-      if (i.isSupport || String(i.pid).startsWith('Sup')) {
-        productName = `Support ${productName}`;
-      }
-      return body.push(row(productName, i.q));
-    }
-    body.push(txt(i.c && i.c.length ? `“${i.raw}” ×${i.q} ไม่ชัดเจน กรุณาเลือกสินค้า:` : `ไม่พบสินค้า “${i.raw}” กรุณาเลือกสินค้า:`, { color: '#B45309', size: 'sm', margin: 'md' }));
-    
-    const suggestList = (i.c && Array.isArray(i.c) && i.c.length > 0) ? i.c : [0, 1, 2, 12, 13, 14, 15];
-    suggestList.forEach((c) => {
-      body.push(btn(P[c]?.[0] || c, `a=pick&p=${id}&i=${n}&c=${c}`, 'secondary'));
-    });
-  });
-  
-  body.push(hbox([btn('‹ เดือนก่อน', `a=mm&p=${id}&d=-1`), btn('เดือนถัดไป ›', `a=mm&p=${id}&d=1`)]));
-  
-  const footer = [hbox([btn('ยกเลิก', `a=cancel&p=${id}`, 'link', '#DC2626'), ...(ready ? [btn('ยืนยัน', `a=ok&p=${id}`, 'primary', '#059669')] : [])])];
-  
-  return flex(`ยืนยัน Order วันที่ ${p.day}`, bubble(`ยืนยัน Order วันที่ ${p.day} · ${mlabel(p.ym)}`, '#1F2937', '#FFFFFF', body, footer));
+  // ถ้ามีหลายเดือน ส่งเป็น Carousel ให้เลื่อนซ้าย-ขวาได้; ถ้าเดือนเดียวส่งเป็น Bubble เดี่ยว
+  return {
+    type: 'flex',
+    altText: 'สรุปรายการออเดอร์',
+    contents: bubbles.length > 1 ? { type: 'carousel', contents: bubbles } : bubbles[0]
+  };
 }
 
 module.exports = { monthsMessage, confirmMessage };
