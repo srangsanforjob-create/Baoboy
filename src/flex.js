@@ -86,7 +86,7 @@ function monthBubble(ym, orders) {
   const body = [];
   let barrels = 0;
   const tally = {};
-  const amenityTally = {}; // แยกเก็บยอดเบิก Amenity ทุกสถานะ
+  const amenityTally = {}; // เก็บยอดเบิก Amenity ทุกสถานะทันทีที่คีย์
   let pendingPaymentCount = 0;
   let supportCount = 0;
 
@@ -108,7 +108,7 @@ function monthBubble(ym, orders) {
             supportCount += i.q;
           }
 
-          // ถ้ารายการนี้เป็นหมวด Amenity ให้จับมารวมยอดสะสมทันที ทุกสถานะ
+          // ถ้ารายการนี้เป็นหมวด Amenity ให้บวกยอดสะสมทันทีทุกสถานะ
           if (productCode !== null && P[productCode]?.[1] === 'amenity') {
             amenityTally[productCode] = (amenityTally[productCode] || 0) + i.q;
           }
@@ -152,10 +152,10 @@ function monthBubble(ym, orders) {
       });
       body.push(sep);
 
-      // สำหรับยอดขายปกติ (นับเฉพาะที่จ่ายแล้ว)
+      // สำหรับยอดขายปกติ (นับเฉพาะที่จ่ายแล้ว และไม่ใช่ Amenity)
       if (o.status === 'paid' && o.items && Array.isArray(o.items)) {
         o.items.forEach((i) => {
-          if (P[i.pid]?.[1] !== 'amenity') { // ไม่เอา amenity มาปนกับยอดขาย
+          if (P[i.pid]?.[1] !== 'amenity') {
             tally[i.pid] = (tally[i.pid] || 0) + i.q;
             if (P[i.pid]?.[1] === 'd') {
               barrels += i.q;
