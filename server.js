@@ -25,7 +25,7 @@ const reply = (replyToken, messages) => client.replyMessage({ replyToken, messag
 const text = (t, quick) => ({ type: 'text', text: t, ...(quick ? { quickReply: { items: quick } } : {}) });
 
 const bkk = () =>
-  new Ints('en-CA', {
+  new Intl('en-CA', {
     timeZone: 'Asia/Bangkok',
     year: 'numeric',
     month: '2-digit',
