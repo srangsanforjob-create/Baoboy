@@ -209,7 +209,7 @@ function confirmMessage(order, pendingId) {
   };
 }
 
-// 2. การ์ดสรุปยอดรายเดือน (เพิ่มยอดรวมเบียร์สด L, R, D แยกในสินค้าปกติ)
+// 2. การ์ดสรุปยอดรายเดือน (เพิ่มยอดรวมเบียร์สด L, R, D แยกในสินค้าปกติ + แยกยอด Install / POSM)
 function monthsMessage(monthList) {
   const bubbles = monthList.map(([ym, orders]) => {
     const statusMap = {
@@ -220,6 +220,8 @@ function monthsMessage(monthList) {
 
     const normalTotals = {};
     const amenityTotals = {};
+    const installTotals = {};
+    const posmTotals = {};
     const supportTotals = {};
     let draftTotal = 0; // ตัวแปรเก็บผลรวมเบียร์สด (L, R, D)
 
@@ -240,13 +242,17 @@ function monthsMessage(monthList) {
           .map((i) => {
             const prod = P[i.pid];
             const name = prod ? prod[0] : 'สินค้า';
-            const cat = prod ? prod[1] : 'o'; // หมวดหมู่สินค้า เช่น 'd' (เบียร์สด), 'amenity', 'o'
+            const cat = prod ? prod[1] : 'otheralc'; // หมวดหมู่สินค้า เช่น 'd', 'amenity', 'install', 'posm', 'otheralc', 'b'
 
-            if (i.pid !== null) {
+            if (i.pid !== null && prod) {
               if (i.isSupport) {
                 supportTotals[i.pid] = (supportTotals[i.pid] || 0) + i.q;
               } else if (cat === 'amenity') {
                 amenityTotals[i.pid] = (amenityTotals[i.pid] || 0) + i.q;
+              } else if (cat === 'install') {
+                installTotals[i.pid] = (installTotals[i.pid] || 0) + i.q;
+              } else if (cat === 'posm') {
+                posmTotals[i.pid] = (posmTotals[i.pid] || 0) + i.q;
               } else {
                 normalTotals[i.pid] = (normalTotals[i.pid] || 0) + i.q;
                 // ถ้าเป็นหมวดเบียร์สด (d) นำมารวมเข้ายอดเบียร์สด L, R, D
@@ -488,6 +494,8 @@ function monthsMessage(monthList) {
       },
       ...buildNormalCategorySummary(),
       ...buildCategorySummary('🍺 ยอดเบิก Amenity:', '#2563EB', amenityTotals),
+      ...buildCategorySummary('🛠️ ยอดติดตั้ง (Install):', '#0F766E', installTotals),
+      ...buildCategorySummary('🪧 ยอดสื่อ POSM:', '#7C3AED', posmTotals),
       ...buildCategorySummary('🎁 ยอด Support (ของแถม):', '#D97706', supportTotals)
     ];
 
