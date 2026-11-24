@@ -209,7 +209,7 @@ function confirmMessage(order, pendingId) {
   };
 }
 
-// 2. การ์ดสรุปยอดรายเดือน (เพิ่มยอดรวมเบียร์สด L, R, D แยกในสินค้าปกติ + แยกยอด Install / POSM)
+// 2. การ์ดสรุปยอดรายเดือน (เพิ่มยอดรวมเบียร์สด L, R, D แยกในสินค้าปกติ + แยกยอด Install / POSM + ยอดรวม Amenity)
 function monthsMessage(monthList) {
   const bubbles = monthList.map(([ym, orders]) => {
     const statusMap = {
@@ -224,6 +224,7 @@ function monthsMessage(monthList) {
     const posmTotals = {};
     const supportTotals = {};
     let draftTotal = 0; // ตัวแปรเก็บผลรวมเบียร์สด (L, R, D)
+    let amenityTotal = 0; // ตัวแปรเก็บผลรวมหมวด Amenity (รวมแก้ว, เหยือก, ทาวเวอร์, CO2, ถังน้ำแข็งคาราบาว)
 
     const orderBoxes = [];
     if (!orders || orders.length === 0) {
@@ -242,20 +243,20 @@ function monthsMessage(monthList) {
           .map((i) => {
             const prod = P[i.pid];
             const name = prod ? prod[0] : 'สินค้า';
-            const cat = prod ? prod[1] : 'otheralc'; // หมวดหมู่สินค้า เช่น 'd', 'amenity', 'install', 'posm', 'otheralc', 'b'
+            const cat = prod ? prod[1] : 'otheralc';
 
             if (i.pid !== null && prod) {
               if (i.isSupport) {
                 supportTotals[i.pid] = (supportTotals[i.pid] || 0) + i.q;
               } else if (cat === 'amenity') {
                 amenityTotals[i.pid] = (amenityTotals[i.pid] || 0) + i.q;
+                amenityTotal += i.q;
               } else if (cat === 'install') {
                 installTotals[i.pid] = (installTotals[i.pid] || 0) + i.q;
               } else if (cat === 'posm') {
                 posmTotals[i.pid] = (posmTotals[i.pid] || 0) + i.q;
               } else {
                 normalTotals[i.pid] = (normalTotals[i.pid] || 0) + i.q;
-                // ถ้าเป็นหมวดเบียร์สด (d) นำมารวมเข้ายอดเบียร์สด L, R, D
                 if (cat === 'd') {
                   draftTotal += i.q;
                 }
@@ -361,7 +362,7 @@ function monthsMessage(monthList) {
       });
     }
 
-    const buildCategorySummary = (title, color, totalsObj) => {
+    const buildCategorySummary = (title, color, totalsObj, totalCount = null, totalLabel = 'ยอดรวมหมวด:') => {
       const entries = Object.entries(totalsObj);
       if (entries.length === 0) return [];
 
@@ -375,6 +376,33 @@ function monthsMessage(monthList) {
           margin: 'md'
         }
       ];
+
+      if (totalCount !== null && totalCount > 0) {
+        boxContents.push({
+          type: 'box',
+          layout: 'horizontal',
+          margin: 'xs',
+          contents: [
+            {
+              type: 'text',
+              text: totalLabel,
+              size: 'xs',
+              weight: 'bold',
+              color: color,
+              flex: 4
+            },
+            {
+              type: 'text',
+              text: `${totalCount}`,
+              size: 'xs',
+              weight: 'bold',
+              color: color,
+              align: 'end',
+              flex: 1
+            }
+          ]
+        });
+      }
 
       entries.forEach(([pid, qty]) => {
         boxContents.push({
@@ -405,7 +433,6 @@ function monthsMessage(monthList) {
       return boxContents;
     };
 
-    // สร้างกล่องสรุปหมวดสินค้าปกติ พร้อมแสดงยอดรวมเบียร์สด L, R, D ด้านบนสุดของหมวด
     const buildNormalCategorySummary = () => {
       const entries = Object.entries(normalTotals);
       if (entries.length === 0 && draftTotal === 0) return [];
@@ -421,7 +448,6 @@ function monthsMessage(monthList) {
         }
       ];
 
-      // แสดงยอดรวมเบียร์สด (L, R, D) เป็นบรรทัดแรกของหมวดสินค้าปกติ
       if (draftTotal > 0) {
         boxContents.push({
           type: 'box',
@@ -449,7 +475,6 @@ function monthsMessage(monthList) {
         });
       }
 
-      // แสดงรายการสินค้าปกติแต่ละตัวต่อท้าย
       entries.forEach(([pid, qty]) => {
         boxContents.push({
           type: 'box',
@@ -493,7 +518,7 @@ function monthsMessage(monthList) {
         margin: 'md'
       },
       ...buildNormalCategorySummary(),
-      ...buildCategorySummary('🍺 ยอดเบิก Amenity:', '#2563EB', amenityTotals),
+      ...buildCategorySummary('🍺 ยอดเบิก Amenity:', '#2563EB', amenityTotals, amenityTotal, 'ยอดรวม Amenity:'),
       ...buildCategorySummary('🛠️ ยอดติดตั้ง (Install):', '#0F766E', installTotals),
       ...buildCategorySummary('🪧 ยอดสื่อ POSM:', '#7C3AED', posmTotals),
       ...buildCategorySummary('🎁 ยอด Support (ของแถม):', '#D97706', supportTotals)
