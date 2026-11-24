@@ -9,7 +9,7 @@ const P = [
   ['Lager กระป๋อง 490ml', 'b', 'ลาเกอร์ can'], ['Dunkel กระป๋อง 490ml', 'b', 'ดังเคล ดังเคล can'],
   ['Weizen กระป๋อง 490ml', 'b', 'ไวเซ่น ไวเซน can'], ['Rose กระป๋อง 490ml', 'b', 'โรเซ่ โรเซ can'],
   ['IPA กระป๋อง 490ml', 'b', 'ไอพีเอ can'], ['PATTAYA กระป๋อง 490ml', 'b', 'พัทยา can'], ['PHUKET กระป๋อง 490ml', 'b', 'ภูเก็ต can'],
-  // Amenity (12..15, 27)
+  // Amenity (12..15, 27..28)
   ['Mug 0.3L', 'amenity', 'mug แก้ว มัค 0.3 m'],
   ['Pine 0.5L', 'amenity', 'pine พายน์ 0.5 p'],
   ['Jug 1L', 'amenity', 'jug เหยือก 1 j'],
@@ -22,8 +22,10 @@ const P = [
   ['Soju Taeyang โยเกิร์ต 360ml', 'o', 'โซจู แทยัง yogurt'], ['Soju Taeyang พีช 360ml', 'o', 'โซจู แทยัง peach'],
   ['Soju Taeyang องุ่น 360ml', 'o', 'โซจู แทยัง grape'], ['Soju Taeyang สตรอเบอรี่ 360ml', 'o', 'โซจู แทยัง strawberry'],
   ['Soju Taeyang เกรปฟรุ๊ต 360ml', 'o', 'โซจู แทยัง grapefruit'],
-  // เพิ่ม CO2 ในหมวด amenity (index 27)
+  // CO2 ในหมวด amenity (index 27)
   ['CO2', 'amenity', 'co cotwo co2 คาร์บอน'],
+  // ถังน้ำแข็งคาราบาว ในหมวด amenity (index 28)
+  ['ถังน้ำแข็งคาราบาว', 'amenity', 'ice ถังน้ำแข็ง คาราบาว'],
 ];
 
 const PT = P.map((p) => (p[0] + ' ' + p[2]).toLowerCase().split(/\s+/));
@@ -53,7 +55,7 @@ function sim(q, t) {
   return 0;
 }
 
-// ฟังก์ชันจับคู่สินค้า (รองรับตัวย่อ M, P, J, T, CO, COTWO, CO2 และคำว่า support/แถม แบบไม่สนตัวพิมพ์เล็กใหญ่)
+// ฟังก์ชันจับคู่สินค้า (รองรับตัวย่อ M, P, J, T, CO, COTWO, CO2, ICE และคำว่า support/แถม แบบไม่สนตัวพิมพ์เล็กใหญ่)
 function match(raw) {
   let cleanRaw = raw.toLowerCase().trim();
   let isSupport = false;
@@ -75,6 +77,7 @@ function match(raw) {
     co: 27,
     cotwo: 27,
     co2: 27,
+    ice: 28,
   };
   const code = codeMap[r];
   if (code !== undefined) return { pid: code, c: [], isSupport };
