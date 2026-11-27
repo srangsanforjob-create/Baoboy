@@ -36,7 +36,6 @@ const todayYm = () => bkk().slice(0, 7);
 
 // ปรับปรุง ymFor: ให้บันทึกเข้าเดือนปัจจุบัน (todayYm) เป็นหลัก เพื่อให้ออเดอร์ย้อนหลังในเดือนเดียวกันแสดงผลครบถ้วน ไม่ถูกปัดไปเดือนหน้า
 const ymFor = (day) => {
-  // หากต้องการยืดหยุ่น เช่น ถ้าวันห่างกันมากๆ ค่อยเช็ก แต่ค่าเริ่มต้นควรอิงเดือนปัจจุบันของวันนี้
   return todayYm();
 };
 
@@ -67,12 +66,24 @@ async function savePendingDb(chat, p) {
 async function getPendingDb(chat, id) {
   if (!id) return null;
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('pending_orders')
       .select('payload')
       .eq('id', String(id))
       .eq('chat_id', chat)
       .maybeSingle();
+
+    // สำรองกรณี chat_id ไม่ตรงกันแต่มี id นี้อยู่จริง
+    if (!data && !error) {
+      const fallback = await supabase
+        .from('pending_orders')
+        .select('payload')
+        .eq('id', String(id))
+        .maybeSingle();
+      data = fallback.data;
+      error = fallback.error;
+    }
+
     if (error) {
       console.error('getPendingDb error:', error);
       return null;
@@ -89,8 +100,7 @@ async function updatePendingDb(chat, id, p) {
     const { error } = await supabase
       .from('pending_orders')
       .update({ payload: p })
-      .eq('id', String(id))
-      .eq('chat_id', chat);
+      .eq('id', String(id));
     if (error) throw error;
   } catch (err) {
     console.error('updatePendingDb exception:', err);
@@ -104,8 +114,7 @@ async function deletePendingDb(chat, id) {
     const { error } = await supabase
       .from('pending_orders')
       .delete()
-      .eq('id', String(id))
-      .eq('chat_id', chat);
+      .eq('id', String(id));
     if (error) console.error('deletePendingDb error:', error);
   } catch (err) {
     console.error('deletePendingDb exception:', err);
@@ -140,19 +149,19 @@ async function onText(ev) {
   try {
     const rawText = ev.message.text.trim();
     const chat = chatOf(ev.source);
-    
+
     // ตรวจสอบคำสั่งสรุป
     const m = rawText.match(/^(?:สรุป\s*|(?:summary|sum)\b\s*)(.*)$/i);
     if (m) return onSummary(ev, chat, m[1].trim());
-    
+
     // แยกข้อความตามบรรทัด รองรับการพิมพ์หลายวันพร้อมกัน
-    const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+    const lines = rawText.split('\n').map((l) => l.trim()).filter(Boolean);
     const parsedOrders = [];
 
     for (const line of lines) {
       const p = parse(line);
       if (p) {
-        p.ym = ymFor(p.day);
+        p.ym = p.ym || ymFor(p.day);
         parsedOrders.push(p);
       }
     }
@@ -165,10 +174,9 @@ async function onText(ev) {
 
     // ตรวจสอบแต่ละออเดอร์ว่ามีความกำกวม (ต้องเลือกสินค้าเพิ่ม) หรือไม่
     for (const p of parsedOrders) {
-      const hasAmbiguousItem = p.items.some(i => i.pid === null);
+      const hasAmbiguousItem = p.items.some((i) => i.pid === null);
 
       if (!hasAmbiguousItem) {
-        // กรณีข้อมูลชัดเจน: บันทึกลงฐานข้อมูลทันทีอัตโนมัติ (ใช้ db.upsertOrder ซึ่งข้างในเป็น insert)
         const items = [];
         p.items.forEach((i) => {
           const e = items.find((x) => x.pid === i.pid && x.isSupport === !!i.isSupport);
@@ -179,7 +187,6 @@ async function onText(ev) {
         await db.upsertOrder(chat, { ym: p.ym, day: p.day, status: orderStatus, items });
         autoSavedDays.push(p.day);
       } else {
-        // กรณีข้อมูลไม่ชัดเจน (มีตัวเลือกที่ต้องกดเลือกสินค้า): เก็บไว้ทำ Pending Card
         const id = await savePendingDb(chat, p);
         if (!ambiguousOrder) {
           ambiguousOrder = p;
@@ -188,7 +195,6 @@ async function onText(ev) {
       }
     }
 
-    // กรณีมีรายการที่ต้องให้ผู้ใช้เลือกสินค้า (กำกวม)
     if (ambiguousOrder) {
       let msg = `บันทึกวันที่ที่ชัดเจนแล้ว (${autoSavedDays.join(', ') || 'ไม่มี'})`;
       if (autoSavedDays.length === 0) {
@@ -200,13 +206,11 @@ async function onText(ev) {
       ]);
     }
 
-    // กรณีทุกรายการถูกต้องครบถ้วน บันทึกสำเร็จทั้งหมดทันทีโดยไม่มีการ์ดเด้ง
     const latestYm = parsedOrders[parsedOrders.length - 1].ym;
     return reply(ev.replyToken, [
       text(`✅ บันทึกออเดอร์สำเร็จทั้งหมด ${parsedOrders.length} รายการ (วันที่: ${autoSavedDays.join(', ')})`),
       await monthMsg(chat, latestYm)
     ]);
-
   } catch (err) {
     console.error('onText error:', err);
     try {
@@ -259,23 +263,42 @@ async function onPostback(ev) {
     }
 
     if (a === 'ok') {
+      const hasUnresolved = p.items.some((i) => i.pid === null);
+      if (hasUnresolved) {
+        return reply(ev.replyToken, [
+          text('กรุณาเลือกสินค้าให้ครบทุกรายการก่อนกดยืนยันครับ'),
+          confirmMessage(p, id)
+        ]);
+      }
+
       const items = [];
-      p.items
-        .filter((i) => i.pid !== null)
-        .forEach((i) => {
-          const e = items.find((x) => x.pid === i.pid && x.isSupport === !!i.isSupport);
-          if (e) e.q += i.q;
-          else items.push({ pid: i.pid, q: i.q, isSupport: !!i.isSupport });
-        });
-      
+      p.items.forEach((i) => {
+        const e = items.find((x) => x.pid === i.pid && x.isSupport === !!i.isSupport);
+        if (e) e.q += i.q;
+        else items.push({ pid: i.pid, q: i.q, isSupport: !!i.isSupport });
+      });
+
       const orderStatus = p.status || 'order';
       await db.upsertOrder(chat, { ym: p.ym, day: p.day, status: orderStatus, items });
       await deletePendingDb(chat, id);
-      return reply(ev.replyToken, [await monthMsg(chat, p.ym)]);
+      return reply(ev.replyToken, [
+        text(`✅ บันทึกออเดอร์วันที่ ${p.day} เรียบร้อยแล้ว`),
+        await monthMsg(chat, p.ym)
+      ]);
     }
 
-    if (a === 'pick') p.items[+d.get('i')].pid = +d.get('c');
-    else if (a === 'mm') p.ym = addMonths(p.ym, +d.get('d'));
+    if (a === 'pick') {
+      const idx = +d.get('i');
+      const cid = +d.get('c');
+      if (p.items[idx]) {
+        p.items[idx].pid = cid;
+        p.items[idx].c = [];
+      }
+    } else if (a === 'mm') {
+      p.ym = addMonths(p.ym, +d.get('d'));
+    } else if (a === 'setym' && d.get('ym')) {
+      p.ym = d.get('ym');
+    }
 
     await updatePendingDb(chat, id, p);
     return reply(ev.replyToken, [confirmMessage(p, id)]);
