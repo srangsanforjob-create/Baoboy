@@ -1,4 +1,4 @@
-// สินค้า + การจับคำใกล้เคียง (รองรับพิมพ์เล็ก/ใหญ่ และการเว้นวรรค)
+// สินค้า + การจับคำใกล้เคียง (รองรับพิมพ์เล็ก/ใหญ่ การเว้นวรรค และรูปแบบการพิมพ์ที่ยืดหยุ่น)
 const CATS = { d: 'เบียร์สด (ถัง)', b: 'เบียร์ขวด/กระป๋อง', amenity: 'ยอดเบิก Amenity สะสม', o: 'สินค้าอื่นๆ', support: 'Support' };
 
 const P = [
@@ -15,7 +15,7 @@ const P = [
   ['Jug 1L', 'amenity', 'jug เหยือก 1 j'],
   ['Tower 3L', 'amenity', 'tower ทาวเวอร์ 3 t'],
   // สินค้าอื่นๆ (16..26)
-  ['บรั่นดี Galaxy แบน 350ml', 'o', 'brandy กาแลคซี่ แบน flat'], ['บรั่นดี Galaxy กลม 700ml', 'o', 'brandy กาแลคซี่ กลม round'],
+  ['บรั่นดี Galaxy แบน 350ml', 'o', 'brandy galf กาแลคซี่ แบน flat'], ['บรั่นดี Galaxy กลม 700ml', 'o', 'brandy galr กาแลคซี่ กลม round'],
   ['เหล้าบ๊วย Kacha 375ml', 'o', 'คาชา บ๊วย plum'],
   ['Whisky TENDO 350ml', 'o', 'วิสกี้ เท็นโด เทนโด'], ['Whisky TENDO 700ml', 'o', 'วิสกี้ เท็นโด เทนโด'],
   ['Whisky ร.ศ. 158 700ml', 'o', 'วิสกี้ รัตนโกสินทร์'],
@@ -55,7 +55,7 @@ function sim(q, t) {
   return 0;
 }
 
-// ฟังก์ชันจับคู่สินค้า (รองรับตัวย่อ M, P, J, T, CO, COTWO, CO2, ICE และคำว่า support/แถม แบบไม่สนตัวพิมพ์เล็กใหญ่)
+// ฟังก์ชันจับคู่สินค้า (รองรับตัวย่อ M, P, J, T, GALF, GALR, CO, COTWO, CO2, ICE และคำว่า support/แถม แบบไม่สนตัวพิมพ์เล็กใหญ่)
 function match(raw) {
   let cleanRaw = raw.toLowerCase().trim();
   let isSupport = false;
@@ -74,6 +74,8 @@ function match(raw) {
     p: 13,
     j: 14,
     t: 15,
+    galf: 16,
+    galr: 17,
     co: 27,
     cotwo: 27,
     co2: 27,
@@ -98,12 +100,12 @@ function parse(text) {
 
   let day = null;
   let customYm = null;
-  let startIndex = 1;
+  const startIndex = 1;
 
   const dateMatch = toks[0].match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
   if (dateMatch) {
     day = +dateMatch[1];
-    let m = +dateMatch[2];
+    const m = +dateMatch[2];
     let y = +dateMatch[3];
     if (y < 100) y += 2000;
     if (day < 1 || day > 31 || m < 1 || m > 12) return null;
@@ -139,7 +141,7 @@ function parse(text) {
   const items = [];
   let q = [];
   for (const t of rest) {
-    const m = t.match(/^([A-Za-zก-๙.]+)(\d+)$/);
+    const m = t.match(/^([A-Za-zก-๙.]+?)(\d+)$/);
     if (m) {
       q.push(m[1]);
       items.push({ raw: q.join(' '), q: +m[2] });
