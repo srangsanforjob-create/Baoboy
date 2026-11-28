@@ -66,13 +66,13 @@ async function upsertOrder(chat, orderData) {
         items: orderData.items,
       })
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('insertOrder error:', error);
       throw error;
     }
-    return data;
+    return data || { ...orderData, chat_id: chat };
   } catch (err) {
     console.error('insertOrder exception:', err);
     throw err;
@@ -88,7 +88,7 @@ async function updateOrderStatus(chat, id, status) {
       .eq('id', id)
       .eq('chat_id', chat)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('updateOrderStatus error:', error);
@@ -149,7 +149,7 @@ module.exports = {
   init,
   listOrders,
   getOrder,
-  upsertOrder, // ชื่อฟังก์ชันคงเดิมเพื่อไม่ให้กระทบไฟล์อื่น แต่ข้างในเปลี่ยนเป็น insert ให้แล้วครับ
+  upsertOrder,
   updateOrderStatus,
   deleteOrder,
   monthsWithData,
