@@ -35,9 +35,7 @@ const bkk = () =>
 const todayYm = () => bkk().slice(0, 7);
 
 // ปรับปรุง ymFor: ให้บันทึกเข้าเดือนปัจจุบัน (todayYm) เป็นหลัก เพื่อให้ออเดอร์ย้อนหลังในเดือนเดียวกันแสดงผลครบถ้วน ไม่ถูกปัดไปเดือนหน้า
-const ymFor = (day) => {
-  return todayYm();
-};
+const ymFor = () => todayYm();
 
 const chatOf = (s) => s.groupId || s.roomId || s.userId;
 const ymQuick = (ym) => ({
@@ -127,7 +125,7 @@ async function monthMsg(chat, ym) {
 
 async function onSummary(ev, chat, rest) {
   try {
-    const yms = (typeof db.monthsWithData === 'function') ? await db.monthsWithData(chat) : [];
+    const yms = typeof db.monthsWithData === 'function' ? await db.monthsWithData(chat) : [];
     if (!rest) {
       if (!yms || !yms.length) return reply(ev.replyToken, [text('ยังไม่มีออเดอร์')]);
       const list = [];
@@ -138,7 +136,7 @@ async function onSummary(ev, chat, rest) {
     if (r.kind === 'ok') return reply(ev.replyToken, [await monthMsg(chat, r.ym)]);
     if (r.kind === 'ask') return reply(ev.replyToken, [text('หมายถึงสรุปของเดือนไหนครับ?', r.options.map(ymQuick))]);
     const recent = (yms.length ? yms : [todayYm()]).slice(-4).map(ymQuick);
-    return reply(ev.replyToken, [text(`ไม่แน่ใจว่าเดือนไหน ลองพิมพ์เช่น สรุป Nov / สรุป พ.ย. /สรุป เดือนหน้า`, recent)]);
+    return reply(ev.replyToken, [text('ไม่แน่ใจว่าเดือนไหน ลองพิมพ์เช่น สรุป Nov / สรุป พ.ย. / สรุป เดือนหน้า', recent)]);
   } catch (err) {
     console.error('onSummary error:', err);
     return reply(ev.replyToken, [text('เกิดข้อผิดพลาดในการดึงข้อมูลสรุป')]);
@@ -160,8 +158,8 @@ async function onText(ev) {
 
     for (const line of lines) {
       const p = parse(line);
-      if (p) {
-        p.ym = p.ym || ymFor(p.day);
+      if (p && Array.isArray(p.items) && p.items.length > 0) {
+        p.ym = p.ym || ymFor();
         parsedOrders.push(p);
       }
     }
@@ -198,18 +196,18 @@ async function onText(ev) {
     if (ambiguousOrder) {
       let msg = `บันทึกวันที่ที่ชัดเจนแล้ว (${autoSavedDays.join(', ') || 'ไม่มี'})`;
       if (autoSavedDays.length === 0) {
-        msg = `พบข้อมูลที่ต้องตรวจสอบเพิ่มเติมครับ`;
+        msg = 'พบข้อมูลที่ต้องตรวจสอบเพิ่มเติมครับ';
       }
       return reply(ev.replyToken, [
         text(msg),
-        confirmMessage(ambiguousOrder, ambiguousId)
+        confirmMessage(ambiguousOrder, ambiguousId),
       ]);
     }
 
     const latestYm = parsedOrders[parsedOrders.length - 1].ym;
     return reply(ev.replyToken, [
       text(`✅ บันทึกออเดอร์สำเร็จทั้งหมด ${parsedOrders.length} รายการ (วันที่: ${autoSavedDays.join(', ')})`),
-      await monthMsg(chat, latestYm)
+      await monthMsg(chat, latestYm),
     ]);
   } catch (err) {
     console.error('onText error:', err);
@@ -267,7 +265,7 @@ async function onPostback(ev) {
       if (hasUnresolved) {
         return reply(ev.replyToken, [
           text('กรุณาเลือกสินค้าให้ครบทุกรายการก่อนกดยืนยันครับ'),
-          confirmMessage(p, id)
+          confirmMessage(p, id),
         ]);
       }
 
@@ -283,7 +281,7 @@ async function onPostback(ev) {
       await deletePendingDb(chat, id);
       return reply(ev.replyToken, [
         text(`✅ บันทึกออเดอร์วันที่ ${p.day} เรียบร้อยแล้ว`),
-        await monthMsg(chat, p.ym)
+        await monthMsg(chat, p.ym),
       ]);
     }
 
